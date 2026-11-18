@@ -34,7 +34,7 @@ Verifieringen gäller koden och bildfilerna enligt nedan. Körning på iPhone oc
 
 Implementerad i huvudappens matdialog. Användaren skriver ett livsmedel och en vikt i gram, väljer en databasvariant och bekräftar beräknade kalorier och protein. Manuell registrering och snabbknapparna finns kvar. Den smarta registreringen använder samma grundformat för matposter och samma lagringsnyckel som tidigare.
 
-#### Datakälla och teknik
+### Datakälla och teknik
 
 - Källa är [Livsmedelsverkets öppna Livsmedelsdatabas](https://dataportal.livsmedelsverket.se/livsmedel/swagger/index.html), tillhandahållen enligt CC BY. Gränssnittet visar källan och att värdena är uppskattade genomsnitt för ätlig del.
 - Verifierat mot faktiska API-svar den 18 november 2026. Listan använder `livsmedel`, `nummer`, `namn` och `_meta.totalRecords`. Näringsvärdena är en array med `euroFIRkod`, `enhet`, `varde`, `viktGram` och `matrisenhetkod`. Kalorier väljs med `ENERC` och enheten `kcal`, protein med `PROT` och enheten `g`. Båda ska avse 100 gram och viktbasen `W`.
@@ -58,6 +58,8 @@ Automatiserade tester med Chromium i mobilstorlek 390 × 844 och en layoutkontro
 - Test på fysisk iPhone med Safari, inklusive skärmtangentbord, långa sökresultat och dialogrullning.
 - Kontroll av den driftsatta versionen efter granskning och publicering via GitHub Pages.
 - Första sökningen kräver nätverk och hämtar hela livsmedelslistan. Näringsvärden hämtas för varje valt livsmedel. Offline visas ett felmeddelande. CORS och API-tillgänglighet beror på Livsmedelsverkets tjänst.
+
+## Nästa planerade uppgift
 
 ### Benpress 2.0
 
