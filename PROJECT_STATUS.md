@@ -41,7 +41,7 @@ Implementerad i huvudappens matdialog. Användaren skriver ett livsmedel och en 
 - API:t svarade med `Access-Control-Allow-Origin: https://erngren.github.io` för både listan och näringsvärdena. Webbläsartest från denna origin med lokalt serverad kandidatkod och riktiga API-anrop passerade. Lösningen använder HTTPS direkt från klienten. Inga API-nycklar behövs.
 - Nätverksanrop har 20 sekunders tidsgräns. Fel och saknade värden stoppar beräkningen. Ändrad söktext eller stängd dialog avbryter pågående anrop och ogiltigförklarar tidigare val. Lagringsfel lämnar portionen kvar för nytt sparförsök.
 
-#### Faktiskt körda tester
+### Faktiskt körda tester
 
 Automatiserade tester med Chromium i mobilstorlek 390 × 844 och en layoutkontroll vid 320 × 568 passerade den 18 november 2026. Skärmbilden av matdialogen granskades visuellt.
 
@@ -51,7 +51,7 @@ Automatiserade tester med Chromium i mobilstorlek 390 × 844 och en layoutkontro
 - Simulerat fullt localStorage, oförändrad lagring efter det misslyckade sparförsöket och lyckat nytt försök.
 - Befintlig matpost visades och bevarades efter omladdning. Manuell mat, Banan och Min taco kunde sparas. Träningslagringens testdata förblev oförändrade. Inga JavaScript-fel registrerades i testen.
 
-#### Återstår och begränsningar
+### Återstår och begränsningar
 
 - Test på fysisk iPhone med Safari, inklusive skärmtangentbord, långa sökresultat och dialogrullning.
 - Kontroll av den driftsatta versionen efter granskning och publicering via GitHub Pages.
