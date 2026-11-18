@@ -28,9 +28,7 @@ Verifieringen gäller koden och bildfilerna enligt nedan. Körning på iPhone oc
 - `deadbug` har en tillfällig bild. Appens befintliga varning anger att bilden visar arm och ben i rörelse på samma sida. Det stämmer med projektägarens beskrivning. Följ guidens instruktion om motsatt arm och ben, till exempel vänster arm och höger ben, och byt sedan sida. Bevara varningen tills bilden rättas.
 - Projektägaren vill bevara fungerande funktioner och sparad historik.
 
-## Nästa planerade uppgift
-
-### Smart matberäknare v1
+## Smart matberäknare v1
 
 Implementerad i huvudappens matdialog. Användaren skriver ett livsmedel och en vikt i gram, väljer en databasvariant och bekräftar beräknade kalorier och protein. Manuell registrering och snabbknapparna finns kvar. Den smarta registreringen använder samma grundformat för matposter och samma lagringsnyckel som tidigare.
 
