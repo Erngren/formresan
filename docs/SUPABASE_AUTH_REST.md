@@ -83,4 +83,12 @@ Lokalt den 19 november 2026 passerade tre spärrtester i `auth-rest-guards.cjs`,
 
 Docker saknas lokalt. Ett integrationsförsök stoppades före miljö-/kontoskapande och HTTP-prov. **Inget av de 13 riktiga Auth/REST-scenarierna är därför lokalt verifierat.** CI-resultatet redovisas separat i PR:n om körningen blir klar. Fysisk iPhone, e-postkod, SMTP, återinloggning, bakgrundsläge, Realtime och ett hostat Supabase-projekt ingår inte i denna testsvit.
 
+### Verifierat i CI med riktig lokal Supabase-stack
+
+[Auth/REST-körning 44492718865](https://github.com/Erngren/formresan/actions/runs/44492718865) passerade den 19 november 2026 med Supabase CLI 3.2.0 på en tillfällig Ubuntu-runner med Docker. Tre spärrtester och samtliga 13 riktiga Auth/REST-scenarier passerade. Auth utfärdade två separata kontons signerade token. REST-skapade raders user_id jämfördes med dessa Auth-ID:n. Alla sju tabeller hade syntetiska sentinelrader så kontoavskiljningen inte kunde passera enbart på tomma resultat.
+
+Parallella REST-uppdateringar gav en vinnare och en revisionskonflikt. Parallella identiska återförsök gav samma kvitto. Den verkliga access-token som sparats från Auth tilläts löpa ut naturligt och nekades därefter i både REST-läsning och RPC. Ogiltig token och manipulerad sub/role nekades i REST/RPC och Auth. Projektbegränsad stop med borttagning av testvolymer samt nät-/katalogcleanup slutfördes utan fel. Inga hostade resurser eller projektägarkonton användes.
+
+Även [befintlig PostgreSQL-regression 44492718697](https://github.com/Erngren/formresan/actions/runs/44492718697) passerade på denna PR, nio tester inklusive överordnad grupp och inga överhoppade. Detta kompletterar den lokala PGlite-körningen. Ingen installation i ett hostat projekt är verifierad eller godkänd genom dessa resultat.
+
 `tests/database-security.cjs` och den mergade SQL-migrationen ändras inte. Den befintliga PostgreSQL-CI:n fortsätter verifiera databasgrunden. Ingen Supabase-resurs skapas i projektägarens konto och ingen produktionsinstallation eller migrering tillåts av testskriptet. Efter kodgranskning och godkända integrationsprov kan nästa separat godkända etapp planeras. Appen börjar inte lagra molndata genom denna PR.
