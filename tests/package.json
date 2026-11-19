@@ -1,9 +1,14 @@
 {
   "name": "formresan-database-tests",
   "private": true,
-  "scripts": { "database": "node --test database-security.cjs" },
+  "scripts": {
+    "database": "node --test database-security.cjs",
+    "auth-rest": "node run-auth-rest.cjs --isolated-local",
+    "auth-rest-guards": "node --test auth-rest-guards.cjs"
+  },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "supabase": "3.2.0"
   }
 }

@@ -1,0 +1,26 @@
+name: Supabase Auth REST security
+on:
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'tests/**'
+      - '.github/workflows/supabase-auth-rest.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - run: npm ci --prefix tests
+      - run: node --test tests/auth-rest-guards.cjs
+      - run: node tests/run-auth-rest.cjs --isolated-local
