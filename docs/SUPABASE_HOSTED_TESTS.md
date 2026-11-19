@@ -1,4 +1,5 @@
 # Hostade Auth/REST-testkort – endast efter separat godkännande
+**Versionsvillkor:** Dessa kort har uppdaterats för det ännu inte hostat installerade förslaget `20261119000200_revision_conflict_http409.sql`. Den gamla grunden använder 40001 och kan utlösa PostgREST-återförsök. Kör inte nya negativa hostade prov mot den gamla grunden för att försöka få en timeout. Se [diagnosen](RPC_TIMEOUT_DIAGNOSIS.md). Ingen installation eller hostad diagnostik är godkänd av denna dokumentändring.
 
 Detta dokument är en manuell, granskningsbar testplan. Det kör inga anrop. Följ först grind A–C i [installationsprocessen](SUPABASE_HOSTED.md). Inget kort har körts mot projektägarens projekt i PR #20.
 
@@ -36,7 +37,7 @@ POST /rest/v1/rpc/apply_operation
 }
 ```
 
-40001 är revisionskonflikt även om PostgREST mappar den till HTTP 500. 22023 är ogiltig operation/payload, 42501 är behörighetsfel. En 404, timeout eller generisk 500 är inte bevis på fungerande RLS. [PostgREST om felmappning](https://docs.postgrest.org/en/stable/references/errors.html)
+Efter det separat granskade migrationsförslaget 20261119000200 är PT409/HTTP 409 en avsiktlig revisionskonflikt. 22023 är ogiltig operation/payload, 42501 är behörighetsfel. En 404, timeout eller generisk 500 är inte bevis på fungerande RLS. [PostgREST om felmappning](https://docs.postgrest.org/en/stable/references/errors.html)
 
 ## 1. Två riktiga syntetiska Auth-konton
 
@@ -78,7 +79,7 @@ För båda kontona ska egna sentinelrader kunna läsas i varje tabell. GET med e
 
 ## 6. Nekade ändringar av den andra ägarens post
 
-Som B, PATCH och DELETE `/rest/v1/main_entries?user_id=eq.{{A_AUTH_UUID}}&entity_id=eq.{{A_ENTITY_UUID}}` ska nekas med 42501/403. PATCH-body kan vara `{"payload":{"synthetic_attack":true}}`. Gör även RPC put respektive delete med A:s UUID och revision 1. Delete använder null-payload. De ska få 40001, eftersom B inte har denna post i sitt konto. Läs sedan som A och verifiera oförändrad payload, revision och historik. Avbryt vid avvikelse. Hårdradering är endast ett avgränsat **förväntat nekat** testförsök mot den registrerade syntetiska raden, aldrig ett rensningssteg.
+Som B, PATCH och DELETE `/rest/v1/main_entries?user_id=eq.{{A_AUTH_UUID}}&entity_id=eq.{{A_ENTITY_UUID}}` ska nekas med 42501/403. PATCH-body kan vara `{"payload":{"synthetic_attack":true}}`. Gör även RPC put respektive delete med A:s UUID och revision 1. Delete använder null-payload. De ska få PT409/HTTP 409, eftersom B inte har denna post i sitt konto. Läs sedan som A och verifiera oförändrad payload, revision och historik. Avbryt vid avvikelse. Hårdradering är endast ett avgränsat **förväntat nekat** testförsök mot den registrerade syntetiska raden, aldrig ett rensningssteg.
 
 ## 7. Ägare, UUID, revision och manipulerad JSONB
 
@@ -88,7 +89,7 @@ En separat ny RPC-post med extra payloadfält user_id=B, entity_id=ett annat UUI
 
 ## 8. Fel revision och operationskvitton
 
-RPC put mot A:s ursprungliga post med expected_revision 99 ska ge 40001. Läs kvitton med `operation_id=eq.{{FAILED_OPERATION_UUID}}` och verifiera noll rader. Läs post/historik igen. Skicka därefter den ursprungliga lyckade skapandebegäran exakt igen, med samma operations-ID. Svaret ska vara samma kvitto och historiken fortfarande innehålla en version. Samma operations-ID med ändrad kcal ska ge 22023 utan ändring.
+RPC put mot A:s ursprungliga post med expected_revision 99 ska ge PT409/HTTP 409. Läs kvitton med `operation_id=eq.{{FAILED_OPERATION_UUID}}` och verifiera noll rader. Läs post/historik igen. Skicka därefter den ursprungliga lyckade skapandebegäran exakt igen, med samma operations-ID. Svaret ska vara samma kvitto och historiken fortfarande innehålla en version. Samma operations-ID med ändrad kcal ska ge 22023 utan ändring.
 
 ## 9. Mjuk radering och återställning
 
@@ -106,7 +107,7 @@ Spara dessutom ett riktigt utfärdat testtoken endast i minnet och låt det pass
 
 ## 12. Samtidiga uppdateringar och återförsök
 
-Skapa en ny syntetisk post med revision 1. Förbered två RPC-put med olika operations-ID:n, samma entity-ID/expected_revision 1 och olika kcal 200/300. Skicka som A parallellt med den lokala API-klientens parallellfunktion. Exakt ett ska lyckas, ett ska ge 40001. Återläs revision 2 och exakt två versioner. Inga blinda omskrivningar görs. Om verktyget bara kör sekventiellt redovisas faktisk samtidighet som ej verifierad.
+Skapa en ny syntetisk post med revision 1. Förbered två RPC-put med olika operations-ID:n, samma entity-ID/expected_revision 1 och olika kcal 200/300. Skicka som A parallellt med den lokala API-klientens parallellfunktion. Exakt ett ska lyckas, ett ska ge PT409/HTTP 409. Återläs revision 2 och exakt två versioner. Inga blinda omskrivningar görs. Om verktyget bara kör sekventiellt redovisas faktisk samtidighet som ej verifierad.
 
 Skicka även två identiska skapandebegäranden parallellt med samma nya operations-ID och entity-ID. Båda ska returnera identiskt kvitto och exakt en post/version/kvitto. Vid nätfel behåll samma operation och kontrollera resultatet före nytt försök.
 

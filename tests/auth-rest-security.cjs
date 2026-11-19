@@ -26,7 +26,7 @@ async function runAuthRest({url,key,runId,seedMetadata,report=console.log}) {
   }
   const ok=(r,label)=>{requireOk(r.ok,label);return r.data;};
   const denied=(r,label)=>requireOk([401,403].includes(r.status) && r.data?.code==='42501',label);
-  const code=(r,c,label)=>requireOk(!r.ok && r.data?.code===c,label);
+  const code=(r,c,label)=>requireOk(!r.ok && r.data?.code===c && (c!=='PT409'||r.status===409),label);
   const select=(token,table,filter='')=>http(`/rest/v1/${table}?select=*${filter}`,token);
   const payload={id:123.5,date:'2026-11-19',kind:'food',name:'Syntetiskt test',kcal:100,protein:10};
   const request=(entity,revision,p=payload,action='put',operation=randomUUID(),collection='main_entries')=>({p_operation_id:operation,p_collection:collection,p_entity_id:entity,p_expected_revision:revision,p_payload:p,p_action:action});
@@ -69,8 +69,8 @@ async function runAuthRest({url,key,runId,seedMetadata,report=console.log}) {
   });
   await step('B kan varken patcha, hårdradera eller RPC-ändra A',async()=>{
     for(const [method,body] of [['PATCH',{payload:{...payload,kcal:999}}],['DELETE',undefined]]) denied(await http(`/rest/v1/main_entries?entity_id=eq.${ae}`,B.token,method,body),'B direktskrivning tillåts');
-    code(await rpc(B.token,request(ae,1)),'40001','B RPC update tillåts');
-    code(await rpc(B.token,request(ae,1,null,'delete')),'40001','B RPC delete tillåts');
+    code(await rpc(B.token,request(ae,1)),'PT409','B RPC update tillåts');
+    code(await rpc(B.token,request(ae,1,null,'delete')),'PT409','B RPC delete tillåts');
     const row=ok(await select(A.token,'main_entries',`&entity_id=eq.${ae}`),'A efterkontroll misslyckades')[0];requireOk(row.revision===1&&row.payload.kcal===100,'A ändrades av B');
   });
   await step('Ägare/moln-ID/revision kan inte patchas och payloadmetadata ger ingen auktoritet',async()=>{
@@ -82,7 +82,7 @@ async function runAuthRest({url,key,runId,seedMetadata,report=console.log}) {
     code(await rpc(A.token,{...request(ae,1),p_collection:'main_entries; drop table auth.users'}),'22023','Fel collection godkändes');
   });
   await step('Fel revision avvisas utan historik/kvitto',async()=>{
-    const r=request(ae,99);code(await rpc(A.token,r),'40001','Fel revision godkändes');
+    const r=request(ae,99);code(await rpc(A.token,r),'PT409','Fel revision godkändes');
     assert.deepEqual(ok(await select(A.token,'sync_operations',`&operation_id=eq.${r.p_operation_id}`),'Kvittoläsning misslyckades'),[]);
   });
   await step('Identiska återförsök ger samma kvitto, ändrad begäran avvisas',async()=>{
@@ -109,7 +109,7 @@ async function runAuthRest({url,key,runId,seedMetadata,report=console.log}) {
   await step('Samtidiga REST-uppdateringar ger exakt en vinnare',async()=>{
     const e=randomUUID();ok(await rpc(A.token,request(e,0)),'Förberedande post misslyckades');
     const results=await Promise.all([rpc(A.token,request(e,1,{...payload,kcal:200})),rpc(A.token,request(e,1,{...payload,kcal:300}))]);
-    requireOk(results.filter(r=>r.ok).length===1&&results.filter(r=>r.data?.code==='40001').length===1,'Samtidig konflikt hanterades fel');
+    requireOk(results.filter(r=>r.ok).length===1&&results.filter(r=>r.status===409&&r.data?.code==='PT409').length===1,'Samtidig konflikt hanterades fel');
     const row=ok(await select(A.token,'main_entries',`&entity_id=eq.${e}`),'Efterkontroll misslyckades')[0];requireOk(row.revision===2,'Fel revision efter konflikt');
     requireOk(ok(await select(A.token,'record_versions',`&entity_id=eq.${e}`),'Historik saknas').length===2,'Fel versionsantal');
     const retry=request(randomUUID(),0),receipts=await Promise.all([rpc(A.token,retry),rpc(A.token,retry)]);receipts.forEach(r=>ok(r,'Parallellt återförsök misslyckades'));assert.deepEqual(receipts[0].data,receipts[1].data);

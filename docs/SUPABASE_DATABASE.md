@@ -1,4 +1,5 @@
 # Supabase – databas och säkerhetsgrund
+**Aktuellt förslag:** [RPC-timeoutdiagnosen](RPC_TIMEOUT_DIAGNOSIS.md) föreslår separat migration från avsiktlig 40001 till PT409/HTTP 409. Grundmigrationen och historiska testresultat nedan ändras inte. Förslaget är inte hostat installerat och inga hostade anrop görs i diagnosuppdraget.
 
 Underlag för PR #18, 19 november 2026. Bas är `b41d6d7`, senaste `main` efter PR #17. Läs tillsammans med `SUPABASE_PLAN.md`. Ingen SQL har körts mot ett riktigt Supabase-projekt. Appen använder fortfarande enbart sin befintliga lokala lagring.
 
@@ -33,7 +34,7 @@ apply_operation(operation_id UUID, collection TEXT, entity_id UUID,
 
 - `collection` måste vara main_entries, training_sessions eller user_settings. Andra värden avvisas före dynamisk SQL. Tabellnamnet vitlistas och citeras, alla datavärden binds som parametrar.
 - Ny post kräver expected_revision 0 och action put. Nästa revision blir 1. Klienten skapar ett nytt moln-UUID och beständigt operations-UUID, skilda från gamla ID:n.
-- Uppdatering kräver exakt aktuell revision. Konflikt ger SQLSTATE 40001. Ingen automatisk omskrivning med en ny revision får ske i en framtida klient.
+- Uppdatering kräver exakt aktuell revision. Den historiska grunden ger SQLSTATE 40001. Det nya separata migrationsförslaget ger PT409/HTTP 409 för avsiktliga revisionskonflikter. Ingen automatisk omskrivning med en ny revision får ske i en framtida klient.
 - Delete kräver null-payload och sätter serverns deleted_at. Innehållet bevaras. En borttagen post kan inte återupplivas med put. Restore kräver aktuell revision och uttrycklig payload och skapar en ny revision. Återställningsval och förhandsvisning tillhör senare etapp.
 - Ägare härleds alltid från auth.uid(). Funktionen tar inget ägarargument. UUID används bara som uppslagsnyckel inom detta konto. Försök med B:s UUID och revision ändrar aldrig B. Samma UUID kan förekomma under ett annat konto eftersom identiteten är sammansatt med ägaren.
 - Gamla payload.id får inte ändras vid uppdatering. Textfält och extra JSON-fält är opaka data. Exempelvis payload.user_id eller payload.revision kan aldrig ändra kolumnernas rättigheter eller revisioner. Framtida adapter måste använda kolumnmetadata för auktoritet och säkert rendera fritext.

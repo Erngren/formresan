@@ -1,4 +1,5 @@
 # Supabase Auth/REST – isolerad säkerhetsverifiering
+**Versionsvillkor:** Den lokala testsviten använder nu även det separata migrationsförslaget `20261119000200_revision_conflict_http409.sql` och kräver PT409/HTTP 409. Det ersätter den avsiktliga 40001-koden, inte verkliga PostgreSQL-serialiseringsfel. Tidigare CI-resultat i dokumentet är historiska. Se [diagnos och nya verifieringskrav](RPC_TIMEOUT_DIAGNOSIS.md). Ingen hostad körning ingår.
 
 PR #19, bas `dc77672` på main efter PR #18, 19 november 2026. Läs först `SUPABASE_PLAN.md` och `SUPABASE_DATABASE.md`. Detta steg ändrar inga appfiler, lokala lagringsnycklar eller riktiga användardata.
 
@@ -68,12 +69,12 @@ Varje PASS-rad skrivs först när motsvarande riktiga HTTP-anrop har kontrollera
 | A/B | Båda har sentinelrader i alla tabeller. Ägarläsning fungerar och explicit annat user_id/UUID ger tomt resultat. |
 | B angriper A | Direkt PATCH/DELETE nekas. RPC med A:s UUID/revision ger konflikt. Efterkontroll som A visar oförändrad revision/payload. |
 | Metadata/JSONB | Direkt INSERT och PATCH av ägare, UUID och revision nekas. Payload med falskt user_id/entity_id/revision ger ingen kolumnauktoritet. Fel ID-typ och SQL-liknande collection avvisas. |
-| Revision | Fel revision ger SQLSTATE 40001, ingen kvittorad. PostgreSQL/PostgREST kan mappa 40001 till HTTP 500. Kontrollera koden och återläs, tolka inte alla HTTP 500 som nätfel eller gör blind omskrivning. |
+| Revision | Efter det nya separata migrationsförslaget ger fel revision PT409/HTTP 409, ingen kvittorad. Den historiska 40001 kan utlösa interna återförsök i äldre PostgREST. Kontrollera koden och återläs, tolka inte alla HTTP 500 som nätfel eller gör blind omskrivning. |
 | Idempotens | Samma operation ger samma kvitto och en version. Ändrat innehåll ger 22023. Även parallella identiska återförsök ingår. |
 | Radering | Tombstone och ny version, blockerad put på raderad post, explicit restore med ny revision och bevarad versionskedja. |
 | Historik/migrering | POST/PATCH/DELETE nekas för versioner, kvitton, batcher och snapshots. Efterkontroll är oförändrad. Privat validator är inte exponerad RPC. |
 | Token | Ogiltig token och ändrad sub/role utan omsignering nekas i REST/RPC och Auth. Riktigt utfärdad token som passerat exp nekas i REST/RPC. |
-| Samtidighet | Två REST-anrop med samma förväntade revision ger exakt en framgång och en 40001. Slutrevision och antal versioner kontrolleras. |
+| Samtidighet | Två REST-anrop med samma förväntade revision ger exakt en framgång och en PT409/HTTP 409. Slutrevision och antal versioner kontrolleras. |
 
 PostgRESTs egna [felkoder och HTTP-mappning](https://docs.postgrest.org/en/stable/references/errors.html) ligger till grund för kontrollerna. Testsvarens råa feltexter loggas inte.
 

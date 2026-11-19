@@ -1,4 +1,5 @@
 # Hostad Supabase – installation efter separat godkännande
+**Senare diagnosförslag:** Den historiska grundens avsiktliga 40001 kan ge återförsöksloop i PostgREST 14. [Diagnosen](RPC_TIMEOUT_DIAGNOSIS.md) föreslår en separat guardad funktionsmigration till PT409/HTTP 409. Installera inte den under ett gammalt godkännande och kör inte nya negativa hostade prov mot den gamla funktionen. Processen och grundfilens hash nedan är historiskt avgränsade till PR #18. En installation av det nya förslaget kräver egen granskning och separat godkännande. Inga hostade anrop görs i diagnosuppdraget.
 
 PR #20, 19 november 2026, bas `b7537e2` efter PR #19. Detta är en förberedd manuell process. **Inga anrop, läskontroller, installationer eller kontoskapanden har gjorts mot projektägarens Supabase-projekt i denna etapp.** Appen och de lokala lagringsnycklarna ändras inte.
 
