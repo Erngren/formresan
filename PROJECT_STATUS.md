@@ -134,3 +134,15 @@ Lokalt passerade tre isolerings-/nyckelspärrtester samt tidigare PGlite-regress
 Appkod, båda localStorage-nycklarna, övningar och bilder är oförändrade. Ingen installation eller resursändring görs i projektägarens Supabase-konto. Inloggningsvy, automatisk synk, verklig migrering och iPhone-sessioner återstår i senare granskade etapper.
 
 [CI med riktig lokal Supabase Auth/REST](https://github.com/Erngren/formresan/actions/runs/44492718865) passerade den 19 november 2026 med CLI 3.2.0 i tillfällig Docker-miljö. Samtliga 13 integrationsscenarier och tre spärrtester passerade, inklusive två riktiga Auth-konton, rätt RPC-identitet, kontoavskiljning i alla sju tabeller, idempotens, samtidiga revisionskonflikter samt manipulerad och naturligt utgången token. Cleanup slutfördes utan fel. [Befintlig PostgreSQL-CI](https://github.com/Erngren/formresan/actions/runs/44492718697) passerade också alla nio tester. Detta är CI-verifiering av en lokal stack, inte installation i projektägarens konto eller test på fysisk iPhone.
+
+## Formresan Cloud – förberedd hostad installation
+
+PR #20 utgår från main efter PR #19. Projektägaren uppger att ett separat Supabase-testprojekt har skapats. Dess identitet, tomhet och dedikerade ändamål är inte verifierade i denna etapp. Inga hostade anrop eller SQL-körningar har gjorts.
+
+`docs/SUPABASE_HOSTED.md` beskriver tre separata godkännanden för läsande preflight, installation av exakt granskad migration/hash och syntetiska Auth/REST-prov. Projektidentitet och acceptans av globala postgres-standardbehörigheter kräver privat manuell granskning. `supabase/verification/hosted-preflight.sql` och `hosted-postflight.sql` är skrivskyddade kontroller, inte migrationer. `docs/SUPABASE_HOSTED_TESTS.md` förbereder separata manuella HTTP-testkort med två syntetiska konton och publishable key.
+
+Ingen hostad installations-/testautomatik levereras eftersom ett projekts dedikerade ändamål inte kan garanteras av namn eller URL. Inga mål, projekt-ID:n, nycklar, lösenord eller token lagras i repo eller CI. Ingen hostad rensning, reset eller destruktiv rollback ingår. Befintlig SQL-migration, appkod, lokal lagring, övningar och bilder ändras inte.
+
+Lokalt passerade fem tester inklusive överordnad grupp i `tests/hosted-checks.cjs` med ny PGlite-databas. Kontrollerna provades mot tom miljö, installerad grund samt avsiktligt osäkra ACL/RLS/funktionsinställningar. CI kör dessa kontroller och de befintliga isolerade regressionerna, utan hostad anslutning. Faktiska CI-resultat redovisas separat i PR:n.
+
+**Hostat återstår helt.** Separata godkännanden, målverifiering, preflight, installation, postflight, kontoskapande och samtliga hostade Auth/REST-testkort är förberedda men inte körda. Lokal/CI-verifierad Supabase från PR #19 ska inte tolkas som verifiering av projektägarens hostade miljö.
