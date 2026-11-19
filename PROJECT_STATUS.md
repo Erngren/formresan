@@ -122,3 +122,13 @@ Migrationsbatcher och råsnapshots har endast ägarfiltrerad läsning. Klientfun
 Se [databasunderlaget](docs/SUPABASE_DATABASE.md) för rättighetsgranskning, testinstruktioner, konfiguration utan hemligheter, avvikelser från den ursprungliga planen och återstående risker. Nästa steg kräver granskning av databas och tester före installation i ett riktigt Supabase-projekt. Ingen inloggningsvy, synk eller uppladdning av befintliga data ingår.
 
 Separat [CI-körning med PostgreSQL 17](https://github.com/Erngren/formresan/actions/runs/44488388443) passerade samma dag. Alla åtta underprov passerade, nio inklusive överordnad grupp, inga överhoppade. Där verifierades även två samtidiga anslutningar med revisionskonflikt utan överskrivning och identiska parallella återförsök med ett enda kvitto/versionsresultat. Riktig Supabase Auth/REST återstår fortfarande.
+
+## Formresan Cloud – Auth/REST-verifiering
+
+Förberett för PR #19 den 19 november 2026 från main efter PR #18. `docs/SUPABASE_AUTH_REST.md` granskar rättigheterna och kräver ett dedikerat Supabase-projekt för nuvarande migrationsmodell. Den globala postgres-spärren för framtida funktions-EXECUTE behålls. Ingen mergad SQL-migration ändras och ingen ny korrigerande migration har bedömts behövas i kodgranskningen.
+
+Nya testskript skapar endast en ny lokal, isolerad Supabase-stack med två syntetiska Auth-konton via vanlig registrering. De kontrollerar riktiga REST/RPC-anrop, kontoavskiljning i alla sju tabeller, metadata, revisioner, historik, idempotens, samtidighet och felaktiga/utgångna token. Administratörsnyckel används inte som klientnyckel och inga konton skapas administrativt. Migrationssentineler läggs separat i den nya lokala databasen.
+
+Lokalt passerade tre isolerings-/nyckelspärrtester samt tidigare PGlite-regression (åtta godkända inklusive överordnad grupp, ett överhoppat tvåanslutningsprov). Docker saknas, så ett lokalt integrationsförsök stoppades före miljö- och kontoskapande. De 13 riktiga Auth/REST-scenarierna är inte lokalt verifierade. Ett separat CI-workflow levereras för samma isolerade Supabase-prov. CI-resultat ska bedömas separat i PR:n.
+
+Appkod, båda localStorage-nycklarna, övningar och bilder är oförändrade. Ingen installation eller resursändring görs i projektägarens Supabase-konto. Inloggningsvy, automatisk synk, verklig migrering och iPhone-sessioner återstår i senare granskade etapper.
