@@ -23,4 +23,5 @@ jobs:
           cache-dependency-path: tests/package-lock.json
       - run: npm ci --prefix tests
       - run: node --test tests/auth-rest-guards.cjs
+      - run: node --test tests/hosted-checks.cjs
       - run: node tests/run-auth-rest.cjs --isolated-local
