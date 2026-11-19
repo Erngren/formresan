@@ -1,0 +1,9 @@
+{
+  "name": "formresan-database-tests",
+  "private": true,
+  "scripts": { "database": "node --test database-security.cjs" },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "pg": "8.23.1"
+  }
+}

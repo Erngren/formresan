@@ -1,0 +1,11 @@
+# Dokumentationsexempel, inte en färdig supabase/config.toml eller klientkonfiguration.
+# Skapa senare lokal CLI-konfiguration med supabase init och granska ändringarna.
+project_id = "formresan-isolated-test"
+[api]
+schemas = ["public"]
+[db]
+major_version = 17
+[auth]
+site_url = "https://erngren.github.io/formresan/"
+additional_redirect_urls = ["https://erngren.github.io/formresan/"]
+# Inga projekt-ID:n för drift, API-nycklar, SMTP-lösenord eller databaslösenord här.

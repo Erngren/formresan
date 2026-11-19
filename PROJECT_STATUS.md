@@ -110,3 +110,13 @@ Testa **Benpress 2.0**, en stående version av benpressguiden som ska vara lätt
 ## Framtida arbete
 
 Om Benpress 2.0 fungerar bra på iPhone kan övriga gymbilder få samma stående format, en bild i taget och efter godkännande. Övriga framtida idéer är ännu ospecificerade.
+
+## Formresan Cloud – databas och säkerhetsgrund
+
+Underlag för granskning den 19 november 2026, från `main` efter PR #17. `supabase/migrations/20261119000100_foundation.sql` definierar sju ägarbundna tabeller med JSONB, UUID, RLS, revisionshistorik och operationskvitton. Klientens direkta tabellskrivningar är stängda. En avgränsad RPC hanterar skapande, revisionskontrollerad uppdatering, mjuk radering, återställning och idempotenta återförsök atomiskt.
+
+Migrationsbatcher och råsnapshots har endast ägarfiltrerad läsning. Klientfunktioner för verklig migrering är avsiktligt inte implementerade. Inga riktiga Supabase-resurser har skapats och ingen SQL har körts mot ett riktigt projekt. Ingen appkod, lokal lagring eller träningsfunktion har ändrats.
+
+`tests/database-security.cjs` kördes i isolerad PGlite 0.5.16 med syntetiska A/B-konton. Sju underprov passerade, åtta inklusive överordnad testgrupp. Ett prov med två faktiska anslutningar hoppades över eftersom lokal PostgreSQL/Docker saknas. CI-workflow och ett separat PostgreSQL-läge levereras för det provet. Faktisk Supabase Auth/REST, JWT-kontroll, Realtime och iPhone-sessioner är inte verifierade här.
+
+Se [databasunderlaget](docs/SUPABASE_DATABASE.md) för rättighetsgranskning, testinstruktioner, konfiguration utan hemligheter, avvikelser från den ursprungliga planen och återstående risker. Nästa steg kräver granskning av databas och tester före installation i ett riktigt Supabase-projekt. Ingen inloggningsvy, synk eller uppladdning av befintliga data ingår.
