@@ -37,7 +37,8 @@ function verifyDockerEndpoint(endpoint) {
   if(typeof endpoint!=='string' || !/^(unix:\/\/\/|npipe:\/\/)/.test(endpoint)) throw new Error('Endast lokal Docker-socket tillåts');
 }
 async function main() {
-  if(process.argv.length!==3 || process.argv[2]!=='--isolated-local') throw new Error('Kräver --isolated-local. Externa projekt stöds inte.');
+  const preserve=process.argv.length===4&&process.argv[3]==='--preserve';
+  if((process.argv.length!==3&&!preserve) || process.argv[2]!=='--isolated-local') throw new Error('Kräver --isolated-local. Externa projekt stöds inte.');
   // Ingen shell- eller env-parameter får välja API, nyckel eller befintlig databas.
   if(Object.keys(process.env).some(k=>/^(FORMRESAN_.*(URL|KEY|TOKEN)|SUPABASE_(ACCESS_TOKEN|URL|DB_URL|PROJECT_REF|SECRET_KEY|SERVICE_ROLE_KEY))$/i.test(k))) throw new Error('Ta bort projekt-/nyckelvariabler före test');
   const env=cleanEnvironment(process.env);
@@ -145,9 +146,13 @@ enable_confirmations = false
   } finally {
     if(db)await db.end();
     // Inget --all, db reset, remote, link eller delete mot externa projekt.
-    if(started)await cliCommand(['stop','--no-backup','--project-id',id]);
-    if(network)await command('docker',['network','rm',id],{env});
-    await fs.rm(projectRoot,{recursive:true}); // Endast mkdtemp-sökvägen ovan.
+    if(preserve) {
+      console.log('Bevarar endast den nyskapade lokala testmiljön. Ingen destruktiv cleanup körs.');
+    } else {
+      if(started)await cliCommand(['stop','--no-backup','--project-id',id]);
+      if(network)await command('docker',['network','rm',id],{env});
+      await fs.rm(projectRoot,{recursive:true}); // Endast mkdtemp-sökvägen ovan.
+    }
   }
 }
 module.exports={main,verifyDockerEndpoint,cleanEnvironment};

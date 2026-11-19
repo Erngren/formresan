@@ -9,6 +9,7 @@ const B = '00000000-0000-4000-8000-000000000002';
 const tables = ['main_entries','training_sessions','user_settings','record_versions','sync_operations','migration_batches','migration_snapshots'];
 const food = {id:123.5,date:'2026-11-19',kind:'food',name:'Test',kcal:100,protein:10,extra:{legacy:true}};
 const migration = readFileSync(resolve(__dirname,'../supabase/migrations/20261119000100_foundation.sql'),'utf8');
+const conflictMigration = readFileSync(resolve(__dirname,'../supabase/migrations/20261119000200_revision_conflict_http409.sql'),'utf8');
 
 test('Isolerad databas och säkerhetsgrund', async t => {
   let db, pool;
@@ -42,6 +43,7 @@ test('Isolerad databas och säkerhetsgrund', async t => {
     insert into auth.users values('${A}'),('${B}');
   `);
   await db.exec(migration);
+  await db.exec(conflictMigration);
   async function asUser(user, action, client=db) {
     if (pool && client === db) {
       const connection = await pool.connect();
@@ -102,11 +104,18 @@ test('Isolerad databas och säkerhetsgrund', async t => {
     await rejects(()=>asUser(A,c=>{return c.query("select set_config('request.jwt.claim.sub','',true)").then(()=>op(c,randomUUID(),0,food));}),'42501');
   });
   await t.test('Främmande UUID och fel revision kan inte skriva över B',async()=>{
-    await rejects(()=>asUser(A,c=>op(c,be,1,food)),'40001');
-    await rejects(()=>asUser(A,c=>op(c,be,1,null,'delete')),'40001');
+    const before=await db.query('select user_id,entity_id,payload,revision,deleted_at from public.main_entries order by user_id,entity_id');
+    const counts=await db.query('select (select count(*) from public.record_versions) versions,(select count(*) from public.sync_operations) operations');
+    await rejects(()=>asUser(A,c=>op(c,be,1,food)),'PT409');
+    await rejects(()=>asUser(A,c=>op(c,be,1,null,'delete')),'PT409');
+    // Fel DELETE-payload når inte payloadkontrollen när ägar-/revisionskontrollen stoppar först.
+    await rejects(()=>asUser(A,c=>op(c,be,1,food,'delete')),'PT409');
     assert.equal(Number((await asUser(B,c=>c.query('select revision from public.main_entries where entity_id=$1',[be]))).rows[0].revision),1);
-    await rejects(()=>asUser(A,c=>op(c,ae,99,food)),'40001');
+    await rejects(()=>asUser(A,c=>op(c,ae,99,food)),'PT409');
     await rejects(()=>asUser(A,c=>op(c,ae,1,{...food,id:321})),'22023');
+    await rejects(()=>asUser(A,c=>op(c,ae,1,food,'delete')),'22023');
+    assert.deepEqual((await db.query('select user_id,entity_id,payload,revision,deleted_at from public.main_entries order by user_id,entity_id')).rows,before.rows);
+    assert.deepEqual((await db.query('select (select count(*) from public.record_versions) versions,(select count(*) from public.sync_operations) operations')).rows,counts.rows);
   });
   await t.test('JSONB valideras, okända fält bevaras utan SQL-exekvering',async()=>{
     for(const p of [null,[],{}, {...food,id:'1); drop table auth.users;--'}, {...food,kcal:'10'}, {...food,date:'2026-02-30'}, {...food,kind:'admin'}]) {
@@ -167,7 +176,7 @@ test('Isolerad databas och säkerhetsgrund', async t => {
     }
     const results=await parallel([c=>op(c,entity,1,{...food,kcal:200}),c=>op(c,entity,1,{...food,kcal:300})]);
     assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
-    assert.equal(results.find(r=>r.status==='rejected').reason.code,'40001');
+    assert.equal(results.find(r=>r.status==='rejected').reason.code,'PT409');
     const e=randomUUID(),oid=randomUUID();
     const retry=await parallel([c=>op(c,e,0,food,'put',oid),c=>op(c,e,0,food,'put',oid)]);
     assert.ok(retry.every(r=>r.status==='fulfilled'));assert.deepEqual(retry[0].value,retry[1].value);
