@@ -77,6 +77,14 @@ Den befintliga lokala Supabase-sviten körs med `--preserve` så att denna diagn
 
 Faktiska CI-resultat redovisas i PR:n. Resultat får inte räknas som godkända innan körningen är klar. Ett uteblivet reproduktionsresultat eller fel i förberedelsen är inte bevis för att felet saknas.
 
+### Faktiskt verifierat 19 november 2026
+
+- [Jämförelse med PostgREST 14.5](https://github.com/Erngren/formresan/actions/runs/44535278359) passerade. En enda HTTP-begäran mot gamla funktionen nådde klientgränsen 1200 ms och gav fler än en databasrollback i observationsfönstret. Samma gatewayversion med två errcode-byten returnerade PT409/HTTP 409 före 2000 ms för revisions-/kontoavslagen. Egen felaktig DELETE gav 22023/HTTP 400. Fullständiga poster, versioner och kvitton var oförändrade efter samtliga avslag. Normala PUT/DELETE, parallell idempotens och samtidiga revisionsuppdateringar passerade.
+- [PostgreSQL-regression](https://github.com/Erngren/formresan/actions/runs/44535278201) passerade alla nio tester inklusive överordnad grupp, utan överhoppade tvåanslutningsprov.
+- [Riktig lokal Supabase-stack](https://github.com/Erngren/formresan/actions/runs/44535278166) passerade samtliga 13 Auth/REST-scenarier med det nya kontraktet. Tre spärrtester, fem preflight-fixturtester och ett migrations-/ACL-prov passerade i samma CI. Stacken kördes med preserve i stället för destruktiv cleanup.
+
+Trösklarna ovan är de verifierade assertionerna, inte ett produktions-SLA eller en uppmätt hostad svarstid. Reproduktionen bekräftar **mekanismen i den isolerade versionen** och att kodvalet undanröjer just den loopen där. Den bevisar inte att ägarens hostade projekt kör samma version, saknar andra fördröjningar eller är redo för release.
+
 ## Före ett separat godkänt hostat prov
 
 1. Granska diagnos, två errcode-byten, fullständig funktionsbody, guard och lokala resultat. Ingen hostad körning ingår i detta uppdrag.
