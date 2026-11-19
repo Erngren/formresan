@@ -105,6 +105,10 @@ Den 19 november 2026 kördes migrationen i PGlite 0.5.16. Sju underprov passerad
 
 Docker, PostgreSQL-server och Supabase CLI fanns inte installerade lokalt. Två samtidiga serveranslutningar och riktig lokal Supabase är därför **inte lokalt verifierade**. CI-resultatet måste granskas separat i PR:n. JavaScript-syntaxkontroll och git diff --check körs före leverans. Ingen mobiltestning behövs för oförändrad appkod och inga iPhone-resultat påstås för denna backend-etapp.
 
+### Faktiskt körd CI med PostgreSQL
+
+[CI-körning 44488388443](https://github.com/Erngren/formresan/actions/runs/44488388443) passerade den 19 november 2026 med PostgreSQL 17 i en tillfällig container. Alla åtta underprov passerade, nio tester inklusive överordnad grupp, inga överhoppade. Två separata anslutningar försökte uppdatera samma revision. Exakt en lyckades och den andra fick 40001. Samtidiga identiska operations-ID:n gav samma kvitto och endast en version. Första CI-körningen upptäckte en skillnad i drivrutinernas bigint-avkodning i en testjämförelse. Jämförelsen korrigerades och hela sviten kördes om med godkänt resultat. Ingen ändring i databaslogiken behövdes.
+
 ## Senare Supabase-konfiguration
 
 1. Skapa först efter uttryckligt godkännande ett separat testprojekt, välj tillgänglig EU-region och bestäm driftansvar/kostnad. Skapa inga produktionsdata i piloten.
@@ -115,6 +119,6 @@ Docker, PostgreSQL-server och Supabase CLI fanns inte installerade lokalt. Två 
 
 ## Kvarstående risker och nästa steg
 
-Databasprov är inte samma sak som säker REST/Auth-integration. CI med faktisk PostgreSQL och efterföljande lokal Supabase behöver godkännas före installation. Riktiga exporter, dagsdubbletter, storleksgränser och okända äldre fält behöver granskas inför migration. En fullständig återläsnings-/bootstrap-RPC, paginering, migrationsskrivning, användarstyrt återställningsflöde och beständig lokal operationskö återstår. Ingen automatisk synk eller klientanpassning levereras här.
+Databasprov är inte samma sak som säker REST/Auth-integration. CI med faktisk PostgreSQL är godkänd. Efterföljande lokal Supabase-verifiering och kodgranskning återstår före installation. Riktiga exporter, dagsdubbletter, storleksgränser och okända äldre fält behöver granskas inför migration. En fullständig återläsnings-/bootstrap-RPC, paginering, migrationsskrivning, användarstyrt återställningsflöde och beständig lokal operationskö återstår. Ingen automatisk synk eller klientanpassning levereras här.
 
 Föreslagen ordning är databasgranskning och säkerhetstest, isolerad Supabase-installation med REST-prov, därefter en separat inloggnings-PR och molnpilot enbart med syntetiska data. Migrering kräver ett eget godkänt uppdrag. Befintliga `formresan_v1` och `formresan_training_v14` har inte ändrats eller lästs av backendtesterna.
