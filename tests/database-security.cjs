@@ -104,7 +104,7 @@ test('Isolerad databas och säkerhetsgrund', async t => {
   await t.test('Främmande UUID och fel revision kan inte skriva över B',async()=>{
     await rejects(()=>asUser(A,c=>op(c,be,1,food)),'40001');
     await rejects(()=>asUser(A,c=>op(c,be,1,null,'delete')),'40001');
-    assert.equal((await asUser(B,c=>c.query('select revision from public.main_entries where entity_id=$1',[be]))).rows[0].revision,1);
+    assert.equal(Number((await asUser(B,c=>c.query('select revision from public.main_entries where entity_id=$1',[be]))).rows[0].revision),1);
     await rejects(()=>asUser(A,c=>op(c,ae,99,food)),'40001');
     await rejects(()=>asUser(A,c=>op(c,ae,1,{...food,id:321})),'22023');
   });
