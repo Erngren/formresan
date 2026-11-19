@@ -153,20 +153,16 @@
     });
   });
   query.addEventListener('input', resetSearch);
-  saveButton.addEventListener('click', () => {
+  saveButton.addEventListener('click', async () => {
     if (!portion) return;
-    const entry = {id: Date.now() + Math.random(), date: day.value, ...portion};
-    const updated = {...db, entries: [...db.entries, entry]};
-    try {
-      localStorage.setItem(KEY, JSON.stringify(updated));
-    } catch {
-      status.textContent = 'Kunde inte spara portionen. Kontrollera lagringsutrymmet och försök igen.';
-      return;
-    }
-    db = updated;
-    render();
-    clearSelection();
-    foodDialog.close();
+    const entry = {...portion}, date = day.value;
+    const saved = await storage.run(details, async () => {
+      await add(entry, date);
+      clearSelection();
+      foodDialog.close();
+    });
+    saveButton.disabled = !portion;
+    if (!saved) status.textContent = 'Portionen är inte sparad. Kontrollera lagringen och försök igen.';
   });
   foodDialog.addEventListener('close', () => {
     form.reset();

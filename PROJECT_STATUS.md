@@ -57,6 +57,50 @@ Automatiserade tester med Chromium i mobilstorlek 390 × 844 och en layoutkontro
 - Kontroll av den driftsatta versionen efter granskning och publicering via GitHub Pages.
 - Första sökningen kräver nätverk och hämtar hela livsmedelslistan. Näringsvärden hämtas för varje valt livsmedel. Offline visas ett felmeddelande. CORS och API-tillgänglighet beror på Livsmedelsverkets tjänst.
 
+## Lokal datasäkerhet
+
+Implementerat för granskning den 19 november 2026. Huvudappen, smart matregistrering och träningsvyn använder nu den gemensamma modulen `js/storage.js`.
+
+- Import och redan lagrade data valideras före användning och skrivning. Positiva numeriska ID:n, unika post-ID:n, riktiga kalenderdatum och relevanta tal-/textfält kontrolleras. Äldre giltiga numeriska ID:n, även decimaltal, och okända extra fält bevaras. Saknade äldre valfria aktivitetsfält får säkra standardvärden. Okända posttyper eller ogiltiga data kräver manuell granskning och kan exporteras som råkopia.
+- Importerade ID:n används som data i raderingsknappar med eventlyssnare. De interpoleras inte i inline-JavaScript. Textfält HTML-escapas och värden som används som tal måste vara tal.
+- Skrivning läser den senaste beständiga datan under ett gemensamt exklusivt Web Lock, tillämpar endast den begärda ändringen, validerar och skriver hela den berörda nyckeln. Alla befintliga sparvägar, inklusive smart mat, använder detta flöde. Nya numeriska ID:n tilldelas under låset och kontrolleras mot befintliga ID:n.
+- Minnesdata och sparbekräftelse uppdateras efter lyckad lagring. Vid fel finns formulär och inmatning kvar. Träningspass läggs inte till i minnet före bekräftad skrivning, vilket förhindrar dubblett vid nytt försök efter fel. Pågående sparning spärrar upprepad inlämning.
+- Storage-/pageshow-händelser läser om data utan att skriva. Träningshistorik uppdateras utan att pågående setinmatning byggs om. Ändrade målutkast bevaras vid omläsning av huvuddata.
+- Befintliga nycklar och grundformat är kvar. Skadad eller otillgänglig lagring leder till felmeddelande och stoppad skrivning. Inget trasigt dokument ersätts automatiskt med standarddata.
+- De separata äldre exporterna har kvar sina grundformat och filnamn och läser beständigt lagrad data. En separat komplett export hämtar båda nycklarna under samma lås. Formatet är `formresan-backup`, `formatVersion: 1`, `exportedAt` i ISO-format, `data`, `rawData` och `errors`. Råsträngarna bevaras även vid trasig JSON. Saknad nyckel anges med null. Nekad läsning stoppar exporten. Gemensam import ingår inte och den kompletta filen avvisas av huvudappens import.
+- En bekräftad import av huvudappens äldre format behåller sitt ersättande beteende. Om huvuddata ändrats sedan importbekräftelsen stoppas ersättningen för att bevara den andra skrivningen. Träningsnyckeln påverkas inte.
+
+### Samtidighet och begränsningar
+
+Web Locks samordnar uppdaterade flikar, huvudappens iframe och direkt öppnad träningsvy inom samma origin. Det är ett avgränsat alternativ till en full IndexedDB-ombyggnad för detta lokala steg. Varje skrivning ändrar en nyckel. Komplett export håller samma lås vid läsning av båda. Någon transaktion för att ersätta båda nycklarna implementeras inte här. [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)
+
+Äldre redan öppna appversioner använder inte låset och kan fortfarande skriva gamla ögonblicksbilder. Vid publicering behöver samtliga gamla Formresan-flikar och hemskärmsvyer laddas om innan registrering fortsätter. Script- och iframeadresser har versionsparameter så att den uppdaterade HTML-versionen begär de nya scriptfilerna. Skyddet gör inget anspråk på att samordna äldre kod eller externa skrivare till localStorage.
+
+Utan Web Locks stoppas skrivningar och samordnad komplett export med ett begripligt fel. De separata exporter som läser en enda giltig nyckel är fortfarande tillgängliga. WebKit dokumenterar Web Locks-stöd från Safari 15.4, men fysisk iPhone-verifiering av denna ändring återstår. [WebKit om Safari 15.4](https://webkit.org/blog/12445/new-webkit-features-in-safari-15-4/)
+
+Lokal webbläsardata kan fortfarande rensas eller försvinna av miljöorsaker. Användaren behöver spara ned exporter. Om lagringen är skadad bevaras råvärdena och skrivningar stoppas. Återställning av skadade data och import av komplettfilen kräver ett senare uttryckligt uppdrag. Kryptering, versionsarkiv, beständig molnkö och Supabase-integration tillhör kommande granskade etapper.
+
+### Faktiskt genomförda tester
+
+`tests/local-data-safety.cjs` innehåller 17 isolerade regressionstestfall med syntetiska data i Chromium vid 390 × 844. Samtliga passerade den 19 november 2026. Node rapporterar 18 godkända tester inklusive den överordnade testgruppen.
+
+- Äldre historik efter omladdning, oförändrade separata exportformat och bevarade extra fält.
+- Giltig äldre import, ogiltiga ID:n, dubbletter, fel kalenderdatum, fel numeriska fält, ofullständiga poster och avvisad komplettfil. Ogiltig import lämnade båda nycklarna oförändrade.
+- Manipulerade ID:n avvisades. HTML-/skripttext i namn, aktivitetsfält, sömntext och träningshistorik kördes inte. Raderingsknapparnas eventlyssnare testades.
+- Simulerade skrivfel i manuell mat, taco, aktivitet, sömn, vikt, kreatin och mål. Data och inmatning bevarades och falska framgångsmeddelanden uteblev. Lyckade nya försök testades.
+- Träningsfel följt av nytt försök gav exakt ett nytt pass. Golfregistrering och äldre träningsfält bevarades.
+- Två flikar skrev 15 poster vardera samtidigt utan förlust eller ID-kollision. Samtidiga huvud-/träningsskrivningar från flik och iframe bevarades. En skrivning mellan importförhandsvisning och importlås stoppade ersättningen.
+- Smart matregistrering testades med syntetiska API-svar, skrivfel och nytt försök. Portionen bevarades vid fel och sparades korrekt efteråt.
+- Komplett export jämfördes mot beständigt lagrade data, båda råsträngarna och exportmetadata. Ett osparat formulär kom inte med som sparad post.
+- Trasig JSON, ogiltiga lagringsstrukturer, nekad läsning både vid start och vid skrivning samt saknat Web Locks-stöd gav ingen nollställning. En råkopia kunde tas när lagringen var läsbar men innehöll trasig JSON.
+- Uppdatering från annan flik bevarade ett pågående setutkast. Separat mobilkontroll öppnade, avkodade och stängde alla 20 guider. Mobil layout granskades visuellt och sidan rymdes på bredden.
+
+Testfilen kräver Playwright med installerad Chromium som utvecklingsverktyg. Inga nya runtime-beroenden har lagts till appen. Kör `node --test tests/local-data-safety.cjs` från repots rot. Om Playwright ligger utanför repot anger `FORMRESAN_PLAYWRIGHT` den absoluta modulvägen. `PLAYWRIGHT_BROWSERS_PATH` kan ange sökvägen till installerade webbläsare. JavaScript-syntaxkontroll och `git diff --check` körs också före leverans.
+
+### Återstår på fysisk iPhone
+
+Testa i Safari och hemskärmsläge med båda vyerna, flera öppna flikar, bakgrund/återgång, importer, nedladdning av båda gamla exporter och komplettfilen samt simulerat fullt eller nekat lagringsutrymme. Bekräfta att den uppdaterade versionen är laddad i varje vy. Kontrollera formulärens felmeddelanden och återförsök. Detta steg skapar ingen reservkopia utanför enheten förrän användaren faktiskt laddar ned och bevarar exportfilen.
+
 ## Nästa planerade uppgift
 
 ### Benpress 2.0
