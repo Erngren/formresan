@@ -226,7 +226,113 @@
     } catch (error) { report(error); }
   }
 
+  // Förberedelse enbart: appens vyer använder fortfarande det separata lokala läget.
+  // auth måste senare vara den gemensamma, betrodda Supabase Auth-klienten.
+  function createAccountStorage(auth) {
+    requireValue(auth && typeof auth.getUser === 'function' && typeof auth.onAuthStateChange === 'function',
+      'Kontolagring kräver en verifierande Auth-klient.');
+    let generation = 0, disposed = false;
+    // Händelsens session/user betros aldrig som identitetskälla. Ingen async Auth här.
+    const invalidate = () => { generation += 1; };
+    const subscription = auth.onAuthStateChange(invalidate)?.data?.subscription;
+    requireValue(subscription && typeof subscription.unsubscribe === 'function', 'Auth-bevakning kunde inte startas.');
+
+    function assertGeneration(expected) {
+      requireValue(!disposed && generation === expected, 'Kontokontexten har ändrats. Öppna kontot på nytt.');
+    }
+
+    async function verifiedUser(expected) {
+      assertGeneration(expected);
+      let response;
+      try { response = await auth.getUser(); } catch {
+        invalidate();
+        throw new Error('Kontot kunde inte verifieras. Ingen lokal reservanvändare används.');
+      }
+      assertGeneration(expected);
+      const id = response?.data?.user?.id;
+      if (response?.error !== null || response?.data?.user?.is_anonymous === true || !text(id) ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        invalidate();
+        throw new Error('En verifierad kontokontext saknas.');
+      }
+      return id.toLowerCase();
+    }
+
+    async function openAccount() {
+      const expected = generation;
+      const userId = await verifiedUser(expected);
+      assertGeneration(expected);
+      const prefix = 'formresan_account_v1:' + userId;
+      const keys = {main: prefix + ':main', training: prefix + ':training'};
+      const lockName = 'formresan-account-data-v1:' + userId;
+
+      // Ett objekt är permanent bundet till en verifierad identitet/generation.
+      // Det följer aldrig automatiskt med till nästa konto, inte heller A -> B -> A.
+      async function access(task) {
+        assertGeneration(expected);
+        requireValue(navigator.locks?.request, 'Kontolagring kräver Web Locks.');
+        const result = await navigator.locks.request(lockName, {mode: 'exclusive'}, async () => {
+          const currentUser = await verifiedUser(expected);
+          if (currentUser !== userId) {
+            invalidate();
+            throw new Error('Auth-kontot har ändrats. Öppna kontot på nytt.');
+          }
+          // Ingen await mellan slutlig verifiering och synkron läsning/commit.
+          const value = task();
+          assertGeneration(expected);
+          return value;
+        });
+        // Stoppa också ett gammalt resultat på väg tillbaka till en framtida vy.
+        assertGeneration(expected);
+        return result;
+      }
+
+      function updateAccount(key, validate, empty, change) {
+        return access(() => {
+          requireValue(typeof change === 'function', 'En synkron ändringsfunktion krävs.');
+          const next = read(key, validate, empty);
+          const outcome = change(next);
+          if (outcome && typeof outcome.then === 'function') {
+            Promise.resolve(outcome).catch(() => {});
+            throw new Error('Kontots ändringsfunktion måste vara synkron.');
+          }
+          const validated = validate(next);
+          assertGeneration(expected);
+          write(key, validated);
+          return validated;
+        });
+      }
+
+      return Object.freeze({
+        userId,
+        readMain: () => access(() => read(keys.main, validateMain, emptyMain)),
+        readTraining: () => access(() => read(keys.training, validateTraining, emptyTraining)),
+        updateMain: change => updateAccount(keys.main, validateMain, emptyMain, change),
+        updateTraining: change => updateAccount(keys.training, validateTraining, emptyTraining, change),
+        // Råexport fungerar även med trasig JSON. Ingen legacy-nyckel läses här.
+        exportRaw: () => access(() => {
+          const rawData = {};
+          for (const kind of ['main', 'training']) {
+            try { rawData[kind] = localStorage.getItem(keys[kind]); } catch {
+              throw new Error('Kontots råkopia kunde inte läsas. Ingen ofullständig kopia har skapats.');
+            }
+          }
+          return {format: 'formresan-account-backup', formatVersion: 1, userId,
+            exportedAt: new Date().toISOString(), rawData};
+        })
+      });
+    }
+
+    return Object.freeze({openAccount, dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      invalidate();
+      subscription.unsubscribe();
+    }});
+  }
+
   window.FormresanStorage = {
+    createAccountStorage,
     MAIN_KEY, TRAINING_KEY, emptyMain, emptyTraining, validateMain, nextId, raw, report, run, download, exportAll,
     readMain: () => read(MAIN_KEY, validateMain, emptyMain),
     readTraining: () => read(TRAINING_KEY, validateTraining, emptyTraining),

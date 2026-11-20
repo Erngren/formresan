@@ -1,0 +1,35 @@
+name: Local account storage
+on:
+  pull_request:
+    paths:
+      - 'js/storage.js'
+      - 'js/training.js'
+      - 'js/smart-food.js'
+      - 'index.html'
+      - 'training/index.html'
+      - 'tests/account-storage.cjs'
+      - 'tests/local-data-safety.cjs'
+      - '.github/workflows/account-storage.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix "${{ runner.temp }}/formresan-browser-tests" --no-package-lock playwright@1.65.1
+      - run: node "${{ runner.temp }}/formresan-browser-tests/node_modules/playwright/cli.js" install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/formresan-chromium
+      - run: node --check js/storage.js
+      - run: node --test tests/account-storage.cjs tests/local-data-safety.cjs
+        env:
+          FORMRESAN_PLAYWRIGHT: ${{ runner.temp }}/formresan-browser-tests/node_modules/playwright
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/formresan-chromium
