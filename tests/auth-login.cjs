@@ -119,6 +119,10 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       assert.notEqual(await page.evaluate(()=>FormresanAccount.getState().phase),'signed_in');
       assert.notEqual(await other.evaluate(()=>FormresanAccount.getState().phase),'signed_in');
       assert.equal(await page.evaluate(k=>localStorage.getItem(k),key),null);
+      // SDK:ts logout-notifieringar kan fortfarande levereras efter locksläpp.
+      // De ska få stoppa ett överlappande försök. Omladdning etablerar en ny
+      // livscykel innan vi separat verifierar återhämtning med konto B.
+      await page.reload();await idle(page);await other.reload();await idle(other);
       await login(other,'b@example.invalid');await phase(other,'signed_in',B);await phase(page,'signed_in',B);
       assert.equal(await page.locator('main').isVisible(),false);await done(f);
     });
