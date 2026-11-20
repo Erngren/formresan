@@ -10,12 +10,16 @@
   function createController() {
     let auth, subscription, coordinator, account, channel;
     let epoch = 0, managed = false, blocked = false, marker = null;
+    let authSignals = 0, verification, signInIntent;
+    const contextListeners = new Set();
     let state = Object.freeze({phase:'unconfigured', managed:false, userId:null, reason:null, accountViewsEnabled:false});
     const views = new Set();
     try { channel = new BroadcastChannel(CHANNEL); } catch {}
     const getState = () => state;
     function invalidate(phase, reason = null) {
       epoch += 1;
+      signInIntent = null;
+      for (const listener of [...contextListeners]) listener('CONTEXT_CHANGED');
       coordinator?.dispose(); coordinator = null; account = null;
       state = Object.freeze({phase, managed, userId:null, reason, accountViewsEnabled:false});
       for (const view of views) view(true, state);
@@ -35,33 +39,72 @@
       try { current = readMarker(); } catch { fail('context_invalid'); throw new Error('Kontokontexten kunde inte läsas.'); }
       if (current !== expectedMarker) { synchronize(); throw new Error('Kontokontexten har ändrats.'); }
     }
-    async function verifyCurrent(expected, expectedMarker) {
+    // En kontroller äger generationen. Råa SDK-notifieringar får inte dessutom
+    // invalidisera en ny prenumerant mitt i samma verifiering.
+    const storageAuth = {
+      getUser: () => auth.getUser(),
+      onAuthStateChange: listener => {
+        contextListeners.add(listener);
+        return {data:{subscription:{unsubscribe:() => contextListeners.delete(listener)}}};
+      }
+    };
+    async function performVerification(expected, expectedMarker) {
       let candidate;
       try {
-        assertCurrent(expected, expectedMarker);
-        const response = await auth.getUser();
-        assertCurrent(expected, expectedMarker);
-        if (!response?.data?.user && (response?.error === null || response?.error?.name === 'AuthSessionMissingError')) {
-          blocked = true; invalidate('signed_out'); return state;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const signal = authSignals;
+          assertCurrent(expected, expectedMarker);
+          const response = await auth.getUser();
+          assertCurrent(expected, expectedMarker);
+          if (!response?.data?.user && (response?.error === null || response?.error?.name === 'AuthSessionMissingError')) {
+            blocked = true; invalidate('signed_out'); return state;
+          }
+          if (response?.error !== null || response?.data?.user?.is_anonymous === true) throw new Error('verification');
+          candidate = FormresanStorage.createAccountStorage(storageAuth, {assertContext:() => assertCurrent(expected, expectedMarker)});
+          const opened = await candidate.openAccount();
+          assertCurrent(expected, expectedMarker);
+          if (opened.userId !== response.data.user.id.toLowerCase()) throw new Error('identity');
+          if (signal !== authSignals) { candidate.dispose(); candidate = null; continue; }
+          coordinator = candidate; candidate = null; account = opened;
+          state = Object.freeze({phase:'signed_in', managed:true, userId:opened.userId, reason:null, accountViewsEnabled:false});
+          for (const view of views) view(false, state);
+          return state;
         }
-        if (response?.error !== null || response?.data?.user?.is_anonymous === true) throw new Error('verification');
-        candidate = FormresanStorage.createAccountStorage(auth, {assertContext:() => assertCurrent(expected, expectedMarker)});
-        const opened = await candidate.openAccount();
-        assertCurrent(expected, expectedMarker);
-        if (opened.userId !== response.data.user.id.toLowerCase()) throw new Error('identity');
-        coordinator = candidate; candidate = null; account = opened;
-        state = Object.freeze({phase:'signed_in', managed:true, userId:opened.userId, reason:null, accountViewsEnabled:false});
-        for (const view of views) view(false, state);
+        throw new Error('unstable_auth');
       } catch {
         candidate?.dispose();
         if (epoch === expected && marker === expectedMarker) fail('verification_failed');
       }
       return state;
     }
+    function verifyCurrent(expected, expectedMarker) {
+      if (verification?.expected === expected && verification.marker === expectedMarker) return verification.promise;
+      const task = {expected, marker:expectedMarker};
+      task.promise = performVerification(expected, expectedMarker).finally(() => { if (verification === task) verification = null; });
+      verification = task;
+      return task.promise;
+    }
+    function authHint() {
+      authSignals += 1;
+      try {
+        if (readMarker() !== marker) synchronize();
+        // Redan låst under lösenordsanropet. Dess avslut måste fortfarande
+        // verifiera getUser och samma avsikt; notifieringen godkänner ingenting.
+        if (signInIntent?.epoch === epoch && signInIntent.marker === marker) return;
+        if (!marker || validMarker(marker).intent !== 'verify' || !auth) {
+          blocked = true;
+          if (state.userId || !['signed_out','error'].includes(state.phase)) invalidate('signed_out');
+          return;
+        }
+        blocked = false;
+        if (state.phase !== 'verifying') invalidate('verifying');
+        scheduleVerification();
+      } catch { fail('context_invalid'); }
+    }
     function scheduleVerification() {
       const expected = epoch, currentMarker = marker;
       // Auth-anrop sker aldrig inne i SDK:ts Auth-callback.
-      setTimeout(() => { if (epoch === expected && !blocked && auth) void verifyCurrent(expected, currentMarker); }, 0);
+      setTimeout(() => { if (epoch === expected && !blocked && auth && state.phase === 'verifying') void verifyCurrent(expected, currentMarker); }, 0);
     }
     function synchronize() {
       let next;
@@ -91,22 +134,18 @@
       try {
         subscription = auth.onAuthStateChange(event => {
           if (event === 'INITIAL_SESSION') return; // attachAuth verifierar alltid med getUser.
-          if (event === 'SIGNED_OUT') {
-            const alreadyLoggedOut = blocked && marker !== null && validMarker(marker).intent === 'logout';
-            blocked = true; invalidate('signed_out');
-            if (!alreadyLoggedOut) try { publish('logout'); } catch { fail('context_unavailable'); }
-          } else if (!blocked && state.phase !== 'verifying') {
-            // Flera SDK-instanser kan notifiera samma inloggning efter att en
-            // flikmarkör redan startat getUser. Starta inte en ny markörcykel
-            // som avbryter den verifieringen. Lagringsobjektets egen Auth-
-            // generation och getUser-kontroller skyddar samtidiga kontobyten.
-            invalidate('verifying');
-            try { publish('verify'); scheduleVerification(); } catch { fail('context_unavailable'); }
-          }
+          // Notifieringar är ledtrådar, aldrig globala användarkommandon.
+          authHint();
+          try { channel.postMessage({type:'auth-hint'}); } catch { fail('context_unavailable'); }
         })?.data?.subscription;
         if (typeof subscription?.unsubscribe !== 'function') throw new Error('subscription');
         const current = readMarker();
         if (current !== null && validMarker(current).intent !== 'verify') { marker = current; blocked = true; invalidate('signed_out'); return state; }
+        if (current !== null) {
+          // En öppnad/äldre flik följer befintlig avsikt utan ny global nonce.
+          marker = current; blocked = false;
+          return await verifyCurrent(invalidate('verifying'), current);
+        }
         return await verify();
       } catch { return fail('configuration_missing'); }
     }
@@ -136,12 +175,27 @@
       try { publish('lock'); } catch { fail('context_unavailable'); throw new Error('context'); }
       const expectedMarker = marker;
       // SDK:ts SIGNED_IN får inte godkänna en pågående/avbruten lösenordsbegäran.
+      signInIntent = {epoch:expected, marker:expectedMarker};
       return Object.freeze({
         assertCurrent: () => assertCurrent(expected, expectedMarker),
-        complete: () => { assertCurrent(expected, expectedMarker); return verify(); }
+        rejectIfCurrent: () => {
+          // Inga globala skrivningar från ett asynkront fel, inte ens efter en
+          // jämförelse som kan bli gammal mellan två localStorage-operationer.
+          try { assertCurrent(expected, expectedMarker); fail('sign_in_failed'); return true; } catch { return false; }
+        },
+        complete: async () => {
+          assertCurrent(expected, expectedMarker);
+          const task = verify(), completionEpoch = epoch, completionMarker = marker;
+          const result = await task;
+          assertCurrent(completionEpoch, completionMarker);
+          return result;
+        }
       });
     }
-    channel?.addEventListener('message', event => { if (event.data?.type === 'invalidate') synchronize(); });
+    channel?.addEventListener('message', event => {
+      if (event.data?.type === 'invalidate') synchronize();
+      if (event.data?.type === 'auth-hint') authHint(); // Ingen återutsändning.
+    });
     window.addEventListener('storage', event => { if (event.key === MARKER || event.key === null && managed) synchronize(); });
     window.addEventListener('pagehide', () => { if (managed) invalidate('signed_out'); });
     window.addEventListener('pageshow', () => { if (managed) { synchronize(); if (auth && !blocked) { invalidate('verifying'); scheduleVerification(); } } });
@@ -164,6 +218,7 @@
       invalidate(window.FormresanAuthConfig?.enabled===false?'signed_out':'verifying');
     }
     return Object.freeze({getState, attachAuth, verify, signOut, cancel, beginSignIn,
+      lockLocal: () => { managed = true; FormresanStorage.suspendLegacy(); return fail('auth_failed'); },
       captureAccount: () => {
         if (state.phase !== 'signed_in' || !account) throw new Error('Ett verifierat konto saknas.');
         const expected = epoch, currentMarker = marker;

@@ -1,5 +1,7 @@
 # Säker inloggningsgrund – steg 3
 
+> Aktuell fliksäkerhet: [AUTH_TAB_SAFETY.md](AUTH_TAB_SAFETY.md), steg 5. Den lokala notifieringsblockeraren är åtgärdad med återverifiering; Auth/testdistribution är fortsatt avstängda. Beskrivningen av steg 3 nedan är historisk.
+
 > Steg 4: [AUTH_TEST_RELEASE.md](AUTH_TEST_RELEASE.md) beskriver separat artefaktbyggare, isolerad origin, bekräftad flikblockerare och en ännu inte körd hostad testplan. Konfigurationen i repot är fortsatt avstängd. Nedan beskrivs steg 3 historiskt.
 
 20 november 2026. Utgångspunkt: main `b231605`, inklusive PR #24.

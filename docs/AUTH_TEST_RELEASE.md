@@ -50,15 +50,11 @@ Byggaren serialiserar med JSON.stringify till en fryst klientkonfiguration, aldr
 
 En framtida aktiv artefakt innehåller offentlig projektadress/publishable key i klientfilen. Dessa är inte hemliga, men ska enligt uppdraget inte versionshanteras. Lösenord, access-/refresh-token eller privilegierade nycklar ska aldrig finnas i byggindata eller artefakten. SDK 2.119.2/SRI och Auth-endpointbegränsning från PR #25 bevaras. Projektkonfigurationen i repot förblir avstängd oavsett byggval.
 
-## Flikbyte: bekräftad blockerare, ingen gissad fix
+## Flikbyte: lokal uppföljning i steg 5
 
-I SDK 2.119.2 skapas en BroadcastChannel med SDK:ts storageKey. Inkommande SDK-notifieringar vidarebefordras till Auth-prenumeranter. Meddelandet saknar Formresans operation/generation. Kontrollern i PR #25 behandlar SIGNED_OUT som utloggning och kan publicera en ny logout-markör även om meddelandet är gammalt. Källa granskad i installerade officiella paketets GoTrueClient, inklusive kanalhantering, signInWithPassword, _signOut och _notifyAllSubscribers.
+PR #26 reproducerade att SDK-SIGNED_OUT utan appgeneration kunde skrivas om till en ny global logout-avsikt. [AUTH_TAB_SAFETY.md](AUTH_TAB_SAFETY.md) beskriver nu fixen: uttryckliga kontokommandon hålls åtskilda från notifieringar; en notifiering låser lokalt och kräver getUser i samma tillåtna kontext utan att skriva ny global avsikt. Verklig logout/lock-avsikt är fortsatt spärrande. Äldre handtag och svar nekas.
 
-Nytt lokalt prov loggar in B, öppnar en andra flik och levererar därefter en fördröjd SDK-SIGNED_OUT med SDK:ts riktiga kanalformat. B:s giltiga syntetiska SDK-session ligger kvar, men båda appvyerna låses och gamla kontoobjekt nekas. Detta bekräftar en begränsning i appens händelsehantering, **inte** en hostad observation eller ett verifierat fel i Supabases server.
-
-**Förhindrandet av att en gammal flik avbryter en ny inloggning är inte klart.** Vi ignorerar inte SIGNED_OUT och öppnar inga data för att kringgå det. A → B → A mellan flikar testas med kontrollerad utloggning och omladdning. Separat prov täcker misslyckad serverutloggning, låst felvy och lyckat nytt försök. Omladdning är en återhämtningsväg, inte bevis för sömlöst byte.
-
-En separat lösning behöver skilja användarens aktuella utloggningsavsikt från SDK-notifieringar, samordna verifiering med appens generation och behålla getUser-/lagringskontrollerna. Den måste provas med avsiktligt försenade SIGNED_OUT/SIGNED_IN, tokenrotation, offline och samtidiga flikoperationer. Generell testaktivering är blockerad tills detta är löst, eller ägaren uttryckligen avgränsar en senare diagnostisk testomgång med accepterad begränsning. Inga befintliga molnverifieringsärenden stängs.
+Den reproducerade lokala notifieringsblockeraren är åtgärdad och A → B → A över flikar provas utan omladdning. Det är inte hostad verifiering eller ett godkännande att aktivera testdistributionen. Verklig Auth, Safari/iPhone, cacheversioner och ytterligare samtidighetsfall behöver separat godkänd testning. Vid osäker session förblir appen låst och omladdning/explicit ny verifiering är reservväg. Inga molnverifieringsärenden stängs.
 
 ## Senare hostad testplan – inte körd
 
@@ -80,7 +76,7 @@ Senare checklista, varje punkt dokumenteras med enbart sanerad status/timing och
 
 1. Kontrollera origin, miljöbanner, releasehash och att ingen legacy-post visas före SDK-laddning. Bekräfta att inga datavyer/molnsynk kan öppnas.
 2. Logga in befintligt syntetiskt A; verifiera rätt identitet med getUser och låst kontovy. Prova generiskt felmeddelande för nekad inloggning utan kontouppräkning.
-3. Logga ut A lokalt och kontrollera båda flikarna, sedan B och åter A. Testa även direkt träning/iframe. Den sena-SIGNED_OUT-blockeraren måste hanteras enligt separat beslutad plan.
+3. Logga ut A lokalt och kontrollera båda flikarna, sedan B och åter A. Testa även direkt träning/iframe. Verifiera även sena SDK-notifieringar enligt steg 5:s negativa prov.
 4. Ladda om en tillåten session; växla bakgrund/förgrund och kontrollera återverifiering. Vänta naturligt till förnyelse eller använd en separat godkänd isolerad sessionsfixtur. Ändra inte projektets JWT-/sessioninställningar som testgenväg.
 5. Blockera/avbryt nätverket lokalt före/under inloggning, getUser och refresh. Kontrollera låst läge och att gamla callbacks inte öppnar annat konto.
 6. Prova utloggningsfel genom lokal nätverksblockering, därefter återhämtning och ny kontrollerad utloggning. Det är inte bevis för lyckad serveråterkallelse förrän servern bekräftat den. Ingen automatisk cleanup eller global logout.
@@ -97,4 +93,4 @@ Testverktyg/miljövariabler enligt [AUTH_LOGIN.md](AUTH_LOGIN.md). Lokalt passer
 
 Befintliga lokala databas-/guardprov: 17 passerade, ett tvåanslutningsprov hoppades över med PGlite. CI kör även befintliga isolerade PostgreSQL-, RPC- och Supabase Auth/REST-flöden; faktisk status länkas i PR:n. Inga SQL-tester/migrationer ändras. Inga deploy-/upload-steg, Pages-rättigheter, secrets eller variables läggs till.
 
-Före riktig testaktivering återstår: godkänd separat host/origin och dess publiceringsprocess, bekräftad projektadress/publishable key och produktionsoriginlista utanför Git, två bekräftade syntetiska konton, lösning eller uttryckligen avgränsad hantering av flikblockeraren, releasegranskning och särskilt godkännande av publicering samt varje typ av hostat Auth-anrop ovan. Ingen av dessa framtida behörigheter antas av detta uppdrag.
+Före riktig testaktivering återstår: godkänd separat host/origin och dess publiceringsprocess, bekräftad projektadress/publishable key och produktionsoriginlista utanför Git, två bekräftade syntetiska konton, granskning av den lokala flikfixen och plan för verkliga Auth-/Safari-prov, releasegranskning och särskilt godkännande av publicering samt varje typ av hostat Auth-anrop ovan. Ingen av dessa framtida behörigheter antas av detta uppdrag.
