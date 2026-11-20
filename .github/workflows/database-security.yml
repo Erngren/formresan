@@ -4,6 +4,7 @@ on:
     paths:
       - 'supabase/**'
       - 'tests/database-security.cjs'
+      - 'tests/auth-login.cjs'
       - 'tests/package*.json'
       - '.github/workflows/database-security.yml'
   workflow_dispatch:

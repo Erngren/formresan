@@ -180,3 +180,13 @@ När kontohantering inleds låses äldre datavyer och lagringsanrop. Modeller, d
 Lokala Chromiumprov vid 390 × 844 omfattar syntetisk A → B → A, utloggning, iframe/direkt träning, flera flikar, ogiltig/avbruten kontext och fördröjda operationer, tillsammans med befintliga lagrings- och regressionstester. Alla 42 prov inklusive tre överordnade grupper passerade lokalt utan överhoppade tester; CI-resultat redovisas i PR:n. Detta verifierar inte riktig Supabase SDK, hostad Auth eller fysisk iPhone. Inga migrationer, SQL-tester, hostade resurser eller öppna molnverifieringsärenden ändras.
 
 Se [ACCOUNT_LIFECYCLE.md](docs/ACCOUNT_LIFECYCLE.md) för gränser, granskningsfynd, testkörning och nästa beslut. Riktig Auth-bootstrap och kontovyer måste granskas separat före aktivering; inga hostade anrop har utförts.
+
+## Säker inloggningsgrund, steg 3
+
+20 november 2026, från main b231605 inklusive PR #24. Officiell @supabase/supabase-js 2.119.2 med fast CDN-adress och SHA-384, gemensam Auth-bootstrap och mobil vy för e-post/lösenord är implementerade. Repo-konfigurationen är enabled:false: ingen SDK eller Auth-nätverkstrafik vid normal sidstart. Ingen aktiverad distribution har gjorts.
+
+Med separat godkänd konfiguration stöds inloggning, lokal utloggning, återverifiering, sessionsåterställning och tokenförnyelse. Web Locks serialiserar användarens Auth-operationer mellan flikar; sena/avbrutna svar kan inte öppna privata vyer. SDK:ts INITIAL_SESSION behandlas som initial notifiering, inte kontobyte; identitet verifieras fortfarande med getUser. Iframe återanvänder toppdokumentets Auth-tjänst. Kontodata och molnsynk förblir avstängda även vid verifierat konto. Registrering, återställningsmejl och redirects är inte aktiverade.
+
+Lokalt passerade 50 browserprov inklusive fyra överordnade grupper vid 390 × 844, med riktig SDK och lokalt simulerad HTTP. Även befintliga databas-/guardprov kördes: 17 passerade, ett tvåanslutningsprov hoppades över eftersom PGlite bara har en anslutning. CI-status redovisas i PR:n; CI kör även isolerade backendflöden. Mobilvyn granskades visuellt i Chromium. Ingen fysisk iPhone eller hostad Auth har testats.
+
+Se [AUTH_LOGIN.md](docs/AUTH_LOGIN.md) för distribution, sessionsrisker, reproducerbara tester och återstående beslut. Nästa steg behöver godkänd projektkonfiguration/releaseprocess och verkliga Auth-/iPhone-prov; registrering/redirect/e-post och kontovyadapter kräver egna beslut. Inga migrationer, SQL-tester, hostade resurser eller gamla testdata har ändrats. Inga molnverifieringsärenden har stängts.
