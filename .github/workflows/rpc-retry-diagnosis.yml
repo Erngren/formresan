@@ -2,6 +2,7 @@ name: Isolated RPC retry diagnosis
 on:
   pull_request:
     paths:
+      - 'tests/auth-login.cjs'
       - 'supabase/migrations/**'
       - 'tests/rpc-*.cjs'
       - '.github/workflows/rpc-retry-diagnosis.yml'

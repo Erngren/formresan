@@ -90,11 +90,16 @@
       auth = client;
       try {
         subscription = auth.onAuthStateChange(event => {
+          if (event === 'INITIAL_SESSION') return; // attachAuth verifierar alltid med getUser.
           if (event === 'SIGNED_OUT') {
             const alreadyLoggedOut = blocked && marker !== null && validMarker(marker).intent === 'logout';
             blocked = true; invalidate('signed_out');
             if (!alreadyLoggedOut) try { publish('logout'); } catch { fail('context_unavailable'); }
-          } else if (!blocked) {
+          } else if (!blocked && state.phase !== 'verifying') {
+            // Flera SDK-instanser kan notifiera samma inloggning efter att en
+            // flikmarkör redan startat getUser. Starta inte en ny markörcykel
+            // som avbryter den verifieringen. Lagringsobjektets egen Auth-
+            // generation och getUser-kontroller skyddar samtidiga kontobyten.
             invalidate('verifying');
             try { publish('verify'); scheduleVerification(); } catch { fail('context_unavailable'); }
           }
@@ -125,6 +130,17 @@
       try { publish('lock'); } catch { fail('context_unavailable'); }
       return state;
     }
+    function beginSignIn() {
+      managed = true; FormresanStorage.suspendLegacy(); blocked = true;
+      const expected = invalidate('verifying');
+      try { publish('lock'); } catch { fail('context_unavailable'); throw new Error('context'); }
+      const expectedMarker = marker;
+      // SDK:ts SIGNED_IN får inte godkänna en pågående/avbruten lösenordsbegäran.
+      return Object.freeze({
+        assertCurrent: () => assertCurrent(expected, expectedMarker),
+        complete: () => { assertCurrent(expected, expectedMarker); return verify(); }
+      });
+    }
     channel?.addEventListener('message', event => { if (event.data?.type === 'invalidate') synchronize(); });
     window.addEventListener('storage', event => { if (event.key === MARKER || event.key === null && managed) synchronize(); });
     window.addEventListener('pagehide', () => { if (managed) invalidate('signed_out'); });
@@ -140,7 +156,13 @@
       // Utan aktiverad Auth kan ingen identitet antas. Legacy-läsningen hanterar
       // otillgänglig lagring separat, utan att läsa någon kontonyckel.
     }
-    return Object.freeze({getState, attachAuth, verify, signOut, cancel,
+    // Konfigurationen laddas före appkoden. Lås innan legacy-data ens läses,
+    // även när SDK-bootstrapen ännu inte hunnit laddas över nätverket.
+    if (window.FormresanAuthConfig !== undefined && window.FormresanAuthConfig?.enabled !== false) {
+      managed = true; blocked = true; FormresanStorage.suspendLegacy();
+      invalidate('verifying');
+    }
+    return Object.freeze({getState, attachAuth, verify, signOut, cancel, beginSignIn,
       captureAccount: () => {
         if (state.phase !== 'signed_in' || !account) throw new Error('Ett verifierat konto saknas.');
         const expected = epoch, currentMarker = marker;

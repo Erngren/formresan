@@ -78,6 +78,22 @@ test('Säker kontolivscykel utan hostad Auth i Chromium 390 × 844',async t=>{
       assert.equal(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('formresan_account_v1:'))),false);
       await context.close();
     });
+    await t.test('Notifieringar under verifiering startar ingen markörcykel och identitetsbyte nekas',async()=>{
+      for(const change of [false,true]){
+        const {context,page,authority}=await setup();
+        await page.evaluate(()=>{testAuth.hold=true;window.pendingVerification=FormresanAccount.attachAuth(testAuth);});
+        await page.waitForFunction(()=>window.verificationHeld);
+        const before=await page.evaluate(k=>localStorage.getItem(k),marker);
+        if(change)authority.user={id:B,is_anonymous:false};
+        await page.evaluate(()=>testAuth.emit('TOKEN_REFRESHED'));
+        assert.equal(await page.evaluate(k=>localStorage.getItem(k),marker),before);
+        await page.evaluate(()=>releaseVerification());await page.evaluate(()=>pendingVerification);
+        await phase(page,change?'error':'signed_in',change?undefined:A);
+        assert.equal(await page.locator('main').isVisible(),false);
+        assert.equal(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('formresan_account_v1:'))),false);
+        await context.close();
+      }
+    });
     await t.test('Köade legacy-skrivningar och gamla formulärcallbacks kan inte återställa A',async()=>{
       const {context,page}=await setup();const before=await dataSnapshot(page);
       await page.evaluate(()=>{navigator.locks.request('formresan-local-data-v1',()=>new Promise(r=>{window.releaseLegacy=r;window.lockHeld=true;}));});

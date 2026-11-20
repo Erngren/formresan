@@ -247,7 +247,9 @@
     let generation = 0, disposed = false;
     // Händelsens session/user betros aldrig som identitetskälla. Ingen async Auth här.
     const invalidate = () => { generation += 1; };
-    const subscription = auth.onAuthStateChange(invalidate)?.data?.subscription;
+    // SDK skickar INITIAL_SESSION till varje ny prenumerant. Det är ingen
+    // kontoövergång och får inte avbryta dess redan pågående getUser-verifiering.
+    const subscription = auth.onAuthStateChange(event => { if (event !== 'INITIAL_SESSION') invalidate(); })?.data?.subscription;
     requireValue(subscription && typeof subscription.unsubscribe === 'function', 'Auth-bevakning kunde inte startas.');
 
     function assertGeneration(expected) {

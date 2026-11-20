@@ -1,5 +1,7 @@
 # Kontolivscykel – säker förberedelse, steg 2
 
+> Uppföljning: [AUTH_LOGIN.md](AUTH_LOGIN.md) beskriver steg 3 med inaktiv distributionskonfiguration, officiell SDK och inloggningsvy. Nedan dokumenteras steg 2 historiskt. Kontovyer/molnsynk förblir avstängda.
+
 20 november 2026. Utgångspunkt: main `147b34a`, inklusive PR #23.
 
 ## Aktiverat och förberett
