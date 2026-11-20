@@ -143,6 +143,9 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       assert.equal(await frame.evaluate(()=>FormresanAuth===parent.FormresanAuth),true);
       assert.equal(f.fixture.sdk,2); // En i varje toppdokument; ingen i iframen.
       await page.locator('#authLogout').click();await idle(page);await phase(other,'signed_out');
+      // Ny livscykel efter utloggning: inga gamla SDK-notifieringar ska behöva
+      // ignoreras för att kontobyte ska lyckas. Se dokumenterad begränsning.
+      await page.reload();await idle(page);await other.reload();await idle(other);
       await login(other,'b@example.invalid');await phase(other,'signed_in',B);await phase(page,'signed_in',B);
       assert.equal(await other.locator('main').isVisible(),false);assert.equal(await page.locator('main').isVisible(),false);
       await done(f);
