@@ -17,6 +17,12 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
   assert.equal(require('node:crypto').createHash('sha384').update(sdkBytes).digest('base64'),'A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ');
   async function setup(conf=config,entry=''){
     const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
+    await context.addInitScript(data=>{
+      if(location.origin!=='https://erngren.github.io')return;
+      if(localStorage.getItem('formresan_v1')===null)localStorage.setItem('formresan_v1',JSON.stringify(data));
+      window.legacyReads=[];const read=Storage.prototype.getItem;
+      Storage.prototype.getItem=function(k){if(['formresan_v1','formresan_training_v14'].includes(k))window.legacyReads.push(k);return read.call(this,k);};
+    },legacy);
     const fixture={calls:[],sdk:0,errors:[],hold:null,offline:false,refresh:0,users:new Map(),refreshes:new Map()};
     function session(id){
       const user={id,aud:'authenticated',role:'authenticated',email:(id===A?'a':'b')+'@example.invalid',created_at:'2026-11-20T00:00:00Z',app_metadata:{provider:'email'},user_metadata:{}};
@@ -71,6 +77,7 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
     });
     await t.test('Lyckad inloggning, felmeddelande, A → B → A och ingen legacy-import',async()=>{
       const f=await setup(),{page}=f;await idle(page);
+      assert.deepEqual(await page.evaluate(()=>legacyReads),[]);
       await page.evaluate(data=>localStorage.setItem('formresan_v1',JSON.stringify(data)),legacy);
       await login(page,'wrong@example.invalid');await idle(page);
       assert.match(await page.locator('#authMessage').innerText(),/Det gick inte att logga in/);

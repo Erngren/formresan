@@ -8,7 +8,7 @@ E-post/lösenordsvyn och integrationen med officiell Supabase SDK är implemente
 
 Med separat godkänd distributionskonfiguration kan vyn logga in med `signInWithPassword`, logga ut lokalt och återverifiera med `getUser`. Felmeddelanden är generiska och visar inte SDK:ts servermeddelanden eller om adressen finns. Dubbelklick spärras; lösenordet tas omedelbart bort från fältet vid submit och skrivs inte till egna lagringsnycklar eller loggar. JavaScript-strängar kan inte garanterat nollställas i webbläsarens minne.
 
-Registrering och lösenordsåterställning visas endast som information om att funktionerna ännu inte är aktiverade. Ingen signUp, resetPasswordForEmail, OTP, OAuth eller redirect-hantering används. Kontovyer och molnsynk är fortsatt helt avstängda: `accountViewsEnabled` är alltid false, även efter lyckad inloggning. Ingen gammal testdata importeras eller raderas.
+Registrering och lösenordsåterställning visas endast som information om att funktionerna ännu inte är aktiverade. Ingen signUp, resetPasswordForEmail, OTP, OAuth eller redirect-hantering används. Kontovyer och molnsynk är fortsatt helt avstängda: `accountViewsEnabled` är alltid false, även efter lyckad inloggning. Ingen gammal testdata importeras eller raderas. Distributionskonfigurationen laddas före lagrings- och appkoden; kontrollerad aktiveringsavsikt låser därför legacy-läsningen redan före SDK-laddning, så gamla testposter inte hinner renderas under uppstart. Detta kontrolleras med förladdad testdata och instrumenterade legacy-läsningar.
 
 ## Fast SDK och betrodd bootstrap
 

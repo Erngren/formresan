@@ -152,6 +152,12 @@
       // Utan aktiverad Auth kan ingen identitet antas. Legacy-läsningen hanterar
       // otillgänglig lagring separat, utan att läsa någon kontonyckel.
     }
+    // Konfigurationen laddas före appkoden. Lås innan legacy-data ens läses,
+    // även när SDK-bootstrapen ännu inte hunnit laddas över nätverket.
+    if (window.FormresanAuthConfig !== undefined && window.FormresanAuthConfig?.enabled !== false) {
+      managed = true; blocked = true; FormresanStorage.suspendLegacy();
+      invalidate('verifying');
+    }
     return Object.freeze({getState, attachAuth, verify, signOut, cancel, beginSignIn,
       captureAccount: () => {
         if (state.phase !== 'signed_in' || !account) throw new Error('Ett verifierat konto saknas.');
