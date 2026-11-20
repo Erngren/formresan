@@ -12,6 +12,7 @@
   let catalog;
   let request;
   let portion;
+  let viewGeneration = 0;
 
   function clearSelection() {
     request?.abort();
@@ -104,6 +105,7 @@
   }
 
   async function select(food, grams) {
+    if (!storage.isLegacyAvailable()) return;
     clearSelection();
     await load('Hämtar näringsvärden …', async controller => {
       const values = await getJson(api + '/' + food.nummer + '/naringsvarden?sprak=1', controller.signal);
@@ -129,6 +131,7 @@
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (!storage.isLegacyAvailable()) return;
     resetSearch();
     const parsed = parseQuery(query.value);
     if (!parsed) {
@@ -154,13 +157,15 @@
   });
   query.addEventListener('input', resetSearch);
   saveButton.addEventListener('click', async () => {
-    if (!portion) return;
+    if (!portion || !storage.isLegacyAvailable()) return;
+    const generation = viewGeneration;
     const entry = {...portion}, date = day.value;
     const saved = await storage.run(details, async () => {
       await add(entry, date);
       clearSelection();
       foodDialog.close();
     });
+    if (generation !== viewGeneration || !storage.isLegacyAvailable()) return;
     saveButton.disabled = !portion;
     if (!saved) status.textContent = 'Portionen är inte sparad. Kontrollera lagringen och försök igen.';
   });
@@ -168,5 +173,11 @@
     form.reset();
     details.open = false;
     resetSearch();
+  });
+  FormresanAccountView.bind(() => {
+    viewGeneration += 1;
+    catalog = undefined;
+    choices.onchange = null;
+    form.reset(); details.open = false; resetSearch();
   });
 })();

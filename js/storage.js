@@ -6,6 +6,12 @@
   const LOCK_NAME = 'formresan-local-data-v1';
   const observed = new Set();
   const pending = new WeakSet();
+  let legacySuspended = false;
+  function assertLegacyAccess() {
+    // Kontrollera även innan en annan fliks storage/BroadcastChannel-händelse hunnit köras.
+    try { if (localStorage.getItem('formresan_account_lifecycle_v1') !== null) legacySuspended = true; } catch {}
+    requireValue(!legacySuspended, 'Det lokala testläget är låst för kontohantering.');
+  }
   const copy = value => JSON.parse(JSON.stringify(value));
   const emptyMain = () => ({goals: {protein: 120, cal: 0}, entries: []});
   const emptyTraining = () => ({sessions: []});
@@ -99,6 +105,7 @@
   }
 
   function raw(key) {
+    if (key === MAIN_KEY || key === TRAINING_KEY) assertLegacyAccess();
     let value;
     try {
       value = localStorage.getItem(key);
@@ -126,13 +133,15 @@
   }
 
   function locked(task) {
+    try { assertLegacyAccess(); } catch (error) { return Promise.reject(error); }
     if (!navigator.locks?.request) {
       return Promise.reject(new Error('Säker sparning kräver en webbläsare med Web Locks. Uppdatera Safari eller använd en aktuell webbläsare. Du kan fortfarande exportera dina data.'));
     }
-    return navigator.locks.request(LOCK_NAME, {mode: 'exclusive'}, task);
+    return navigator.locks.request(LOCK_NAME, {mode: 'exclusive'}, () => { assertLegacyAccess(); return task(); });
   }
 
   function write(key, value) {
+    if (key === MAIN_KEY || key === TRAINING_KEY) assertLegacyAccess();
     try {
       localStorage.setItem(key, JSON.stringify(value));
       observed.add(key);
@@ -161,6 +170,7 @@
   }
 
   function report(error) {
+    if (legacySuspended) return;
     const message = error instanceof Error ? error.message : 'Kunde inte spara. Försök igen.';
     let notice = document.getElementById('storageNotice');
     const repeated = notice?.textContent === message;
@@ -176,6 +186,7 @@
   }
 
   async function run(container, task) {
+    if (legacySuspended) return false;
     if (pending.has(container)) return false;
     pending.add(container);
     const controls = container.matches('button, input, select') ? [container] : [...container.querySelectorAll('input, select, button')];
@@ -188,12 +199,13 @@
       report(error);
       return false;
     } finally {
-      controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      if (!legacySuspended) controls.forEach((control, index) => { control.disabled = disabled[index]; });
       pending.delete(container);
     }
   }
 
   function download(value, filename) {
+    assertLegacyAccess();
     const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], {type: 'application/json'}));
     const link = document.createElement('a');
     link.href = url;
@@ -222,13 +234,14 @@
     };
     try {
       const backup = await locked(capture);
+      assertLegacyAccess();
       download(backup, 'formresan-komplett-' + backup.exportedAt.slice(0, 10) + '.json');
     } catch (error) { report(error); }
   }
 
   // Förberedelse enbart: appens vyer använder fortfarande det separata lokala läget.
   // auth måste senare vara den gemensamma, betrodda Supabase Auth-klienten.
-  function createAccountStorage(auth) {
+  function createAccountStorage(auth, {assertContext = () => {}} = {}) {
     requireValue(auth && typeof auth.getUser === 'function' && typeof auth.onAuthStateChange === 'function',
       'Kontolagring kräver en verifierande Auth-klient.');
     let generation = 0, disposed = false;
@@ -239,6 +252,7 @@
 
     function assertGeneration(expected) {
       requireValue(!disposed && generation === expected, 'Kontokontexten har ändrats. Öppna kontot på nytt.');
+      assertContext();
     }
 
     async function verifiedUser(expected) {
@@ -332,6 +346,9 @@
   }
 
   window.FormresanStorage = {
+    assertLegacyAccess,
+    isLegacyAvailable: () => { try { assertLegacyAccess(); return true; } catch { return false; } },
+    suspendLegacy: () => { legacySuspended = true; },
     createAccountStorage,
     MAIN_KEY, TRAINING_KEY, emptyMain, emptyTraining, validateMain, nextId, raw, report, run, download, exportAll,
     readMain: () => read(MAIN_KEY, validateMain, emptyMain),
