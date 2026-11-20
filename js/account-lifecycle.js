@@ -95,7 +95,11 @@
             const alreadyLoggedOut = blocked && marker !== null && validMarker(marker).intent === 'logout';
             blocked = true; invalidate('signed_out');
             if (!alreadyLoggedOut) try { publish('logout'); } catch { fail('context_unavailable'); }
-          } else if (!blocked) {
+          } else if (!blocked && state.phase !== 'verifying') {
+            // Flera SDK-instanser kan notifiera samma inloggning efter att en
+            // flikmarkör redan startat getUser. Starta inte en ny markörcykel
+            // som avbryter den verifieringen. Lagringsobjektets egen Auth-
+            // generation och getUser-kontroller skyddar samtidiga kontobyten.
             invalidate('verifying');
             try { publish('verify'); scheduleVerification(); } catch { fail('context_unavailable'); }
           }
