@@ -1,5 +1,7 @@
 # Kontobunden lokal lagring – inaktiv förberedelse
 
+> Uppföljning steg 2: [Kontolivscykel](ACCOUNT_LIFECYCLE.md) lägger till gemensam verifieringskontroller och vyspärr. Beskrivningen nedan avser steg 1; kontovyer och riktig Auth-bootstrap är fortfarande inaktiva.
+
 20 november 2026, från main `2d0a4c2` efter PR #21. Projektägaren anger att befintliga lokala poster endast är testdata. De raderas, migreras eller laddas inte upp automatiskt. Inga Supabase-migrationer, SQL-tester eller öppna verifieringsärenden ändras.
 
 ## Vad som faktiskt används i appen

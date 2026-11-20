@@ -170,3 +170,13 @@ Isolerad CI passerade den 19 november 2026. [PostgREST 14.5-jämförelsen](https
 Lokalt i Chromium 390 × 844 passerade 12 nya tester inklusive överordnad grupp och alla 18 befintliga lokala regressionstester inklusive överordnad grupp. Nya tester använder bara syntetisk Auth och lokalt uppfyllda appfiler. A/B-isolering, kontextfel, fördröjda/konkurrerande operationer, verkliga Web Locks över två flikar, utebliven automatisk legacy-import, råexport och ett gemensamt kontoobjekt i huvudfönster/iframe verifierades. Det är inte bevis för färdig Auth-/vyintegration eller riktig SDK-händelseleverans.
 
 Se [ACCOUNT_STORAGE.md](docs/ACCOUNT_STORAGE.md) för API-kontrakt, risker och blockerande nästa steg. Före aktivering krävs riktig Auth, gemensam kontolivscykel i båda vyerna och fristående träning, rensning av minnesvyer/utkast vid byte, skydd mot sena UI-callbacks, offlinebeslut och Safari-/fliktester. Inga gamla testdata raderas för att uppnå detta.
+
+## Kontolivscykel, steg 2 – säker förberedelse
+
+20 november 2026, från main `147b34a` inklusive PR #23. Gemensam kontroller för huvudapp/iframe och direkt träning förbereds med officiella Auth-metodkontrakt: getUser-verifiering, Auth-händelser och lokal signOut. Ingen SDK-bootstrap, projektkonfiguration, inloggningsvy eller molnsynk aktiveras. Normal sidstart visar uttryckligt lokalt testläge utan Auth-anrop.
+
+När kontohantering inleds låses äldre datavyer och lagringsanrop. Modeller, dialoger och utkast rensas i minnet; sena importer, exporter och smart mat-resultat spärras. En icke-hemlig markör och flikhändelser invaliderar kontexten; ingen meddelandeidentitet betros. Även verifierat konto håller privata vyer låsta: kontobunden vyadapter är nästa avgränsade steg. Ingen testdata raderas, importeras eller laddas upp.
+
+Lokala Chromiumprov vid 390 × 844 omfattar syntetisk A → B → A, utloggning, iframe/direkt träning, flera flikar, ogiltig/avbruten kontext och fördröjda operationer, tillsammans med befintliga lagrings- och regressionstester. Alla 42 prov inklusive tre överordnade grupper passerade lokalt utan överhoppade tester; CI-resultat redovisas i PR:n. Detta verifierar inte riktig Supabase SDK, hostad Auth eller fysisk iPhone. Inga migrationer, SQL-tester, hostade resurser eller öppna molnverifieringsärenden ändras.
+
+Se [ACCOUNT_LIFECYCLE.md](docs/ACCOUNT_LIFECYCLE.md) för gränser, granskningsfynd, testkörning och nästa beslut. Riktig Auth-bootstrap och kontovyer måste granskas separat före aktivering; inga hostade anrop har utförts.

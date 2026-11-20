@@ -23,9 +23,11 @@ function setHtml(id,n,prev){return `<div class="set"><label>Vikt (kg)<input type
   if (!exercises.length) return alert('Registrera minst en övning först.');
   const date = today();
   await storage.run(document.querySelector('main'), async () => {
-    state = await storage.updateTraining(latest => {
+    const next = await storage.updateTraining(latest => {
       latest.sessions.push({id: storage.nextId(latest.sessions), date, plan, exercises});
     });
+    storage.assertLegacyAccess();
+    state = next;
     alert('Sparat! Grymt jobbat 💙');
     render();
   });
@@ -43,6 +45,7 @@ async function download() {
   catch (error) { storage.report(error); }
 }
 function refreshTraining() {
+  if (!storage.isLegacyAvailable()) return;
   try { state = storage.readTraining(); renderHistory(); }
   catch (error) { storage.report(error); }
 }
@@ -50,4 +53,6 @@ window.addEventListener('storage', event => {
   if (event.key === KEY || event.key === null) refreshTraining();
 });
 window.addEventListener('pageshow', refreshTraining);
-document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{current=b.dataset.r;render()});render();
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{if(!storage.isLegacyAvailable())return;current=b.dataset.r;render()});
+FormresanAccountView.bind(() => { state = storage.emptyTraining(); current = 'a'; historyOpen = false; render(); $('guideBody').replaceChildren(); });
+if (storage.isLegacyAvailable()) render();
