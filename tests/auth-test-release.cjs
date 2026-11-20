@@ -26,6 +26,24 @@ test('Produktionsorigin, sökvägar, Git-kataloger och implicit aktivering nekas
   assert.throws(()=>build({output:output(),testOrigin,activationFile:approvalFile(approval)}));
   assert.throws(()=>build({output:output(),testOrigin,activate:true}));
 });
+test('Testkopians cachepolicy täcker alla statiska sökvägar och är hashbunden',()=>{
+  const original=fs.readFileSync(path.join(root,'js/auth-config.js'));
+  for(const active of [false,true]){
+    const target=output(),manifest=build({output:target,testOrigin,...(active?{activate:true,activationFile:approvalFile(approval)}:{})});
+    const file=path.join(target,'_headers'),bytes=fs.readFileSync(file),lines=bytes.toString('utf8').trimEnd().split('\n');
+    assert.equal(lines.shift(),'/*'); // Även /, /training/ och JS med query omfattas.
+    assert.ok(lines.every(line=>/^  [A-Za-z-]+: [^\r\n]+$/.test(line)));
+    const headers=Object.fromEntries(lines.map(line=>line.trim().split(': ')));
+    assert.equal(lines.length,4); // Inga extra regler, redirects eller datarensning.
+    assert.deepEqual(headers,{'Cache-Control':'no-store','CDN-Cache-Control':'no-store','Netlify-CDN-Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'});
+    assert.equal(manifest.sha256._headers,crypto.createHash('sha256').update(bytes).digest('hex'));
+    fs.appendFileSync(file,'# ändrat efter manifest\n');
+    assert.notEqual(manifest.sha256._headers,crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
+    assert.equal(manifest.authEnabled,active);
+  }
+  assert.equal(fs.existsSync(path.join(root,'_headers')),false);
+  assert.deepEqual(fs.readFileSync(path.join(root,'js/auth-config.js')),original);
+});
 test('Aktiveringsfil kräver uttryckligt val, separat origin och endast publishable key',()=>{
   for(const delta of [{purpose:'production'},{approval:'yes'},{targetProject:'wrong'},{deploymentOrigin:'https://wrong.invalid'},
     {productionOrigins:[testOrigin,'https://erngren.github.io']},{productionOrigins:[]},{publishableKey:'sb_secret_SYNTHETIC'},

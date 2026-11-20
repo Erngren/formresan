@@ -57,6 +57,9 @@ function build({output,testOrigin,activationFile,activate=false}){
   content['js/auth-test-release.js']=Buffer.from('window.FormresanAuthTestRelease = Object.freeze('+JSON.stringify(release)+');\n');
   content['js/auth-config.js']=Buffer.from('window.FormresanAuthConfig = Object.freeze('+JSON.stringify(config)+');\n');
   content['.nojekyll']=Buffer.from('');
+  // Endast den genererade testkopian. Policyn ska ingå i manifestet, inte
+  // läggas till manuellt efter att artefakten har granskats/hashats.
+  content['_headers']=Buffer.from('/*\n  Cache-Control: no-store\n  CDN-Cache-Control: no-store\n  Netlify-CDN-Cache-Control: no-store\n  X-Robots-Tag: noindex, nofollow\n');
   const hashes={};for(const file of Object.keys(content).sort())hashes[file]=crypto.createHash('sha256').update(content[file]).digest('hex');
   const manifest={schemaVersion:1,environment:'auth-test',authEnabled:config.enabled,deploymentOrigin:testOrigin,
     sourceRevision:execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim(),sha256:hashes};
