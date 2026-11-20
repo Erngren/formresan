@@ -75,8 +75,8 @@
         if (state.phase !== 'signed_in') throw new Error('verification');
       });
     } catch {
-      controller.cancel();
-      message = cancelled ? 'Inloggningen avbröts. Du kan försöka igen.' : 'Det gick inte att logga in. Kontrollera uppgifterna och anslutningen och försök igen.';
+      lease?.rejectIfCurrent(); // Ett gammalt svar får inte skriva över nyare avsikt.
+      message = controller.getState().phase === 'signed_in' ? '' : cancelled ? 'Inloggningen avbröts. Du kan försöka igen.' : 'Det gick inte att logga in. Kontrollera uppgifterna och anslutningen och försök igen.';
     } finally { password = ''; busy = false; emit(); }
   }
   async function signOut() {
@@ -84,14 +84,14 @@
     busy = true; message = ''; controller.cancel(); emit();
     try { await exclusive(() => controller.signOut());
       if (controller.getState().phase === 'error') throw new Error('logout');
-    } catch { controller.cancel(); message = 'Utloggningen kunde inte slutföras. Vyerna är låsta. Försök igen.'; }
+    } catch { controller.lockLocal(); message = 'Utloggningen kunde inte slutföras. Vyerna är låsta. Försök igen.'; }
     finally { busy = false; emit(); }
   }
   async function retry() {
     if (!ready || busy) return;
     busy = true; message = ''; emit();
     try { await exclusive(() => controller.verify()); }
-    catch { controller.cancel(); }
+    catch { controller.lockLocal(); }
     finally { busy = false; emit(); }
   }
   window.FormresanAuth = Object.freeze({
@@ -99,10 +99,11 @@
     cancel: () => { cancelled = true; controller.cancel(); message = 'Inloggningen avbryts. Vänta innan du försöker igen.'; emit(); },
     subscribe: listener => { listeners.add(listener); listener(); return () => listeners.delete(listener); }
   });
+  controller.registerView((clear,state) => { if (state.phase === 'signed_in') { message = ''; emit(); } });
   async function start() {
     if (config?.enabled === false || config === undefined) return;
     // Okänd eller ogiltig aktiveringskonfiguration låser, utan SDK/Auth-anrop.
-    if (!validConfig() || !navigator.locks?.request || typeof BroadcastChannel !== 'function') { controller.cancel(); message = 'Inloggning är inte korrekt konfigurerad.'; emit(); return; }
+    if (!validConfig() || !navigator.locks?.request || typeof BroadcastChannel !== 'function') { controller.lockLocal(); message = 'Inloggning är inte korrekt konfigurerad.'; emit(); return; }
     await controller.verify(); // Stäng legacy-vyn innan SDK kan återställa session.
     busy = true; emit();
     try {
@@ -116,7 +117,7 @@
       auth = client.auth;
       await controller.attachAuth(auth);
       ready = true;
-    } catch { controller.cancel(); message = 'Inloggning kunde inte startas. Ladda om sidan för att försöka igen.'; }
+    } catch { controller.lockLocal(); message = 'Inloggning kunde inte startas. Ladda om sidan för att försöka igen.'; }
     finally { busy = false; emit(); }
   }
   void start();

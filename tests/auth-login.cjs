@@ -10,6 +10,7 @@ const legacy={goals:{protein:120,cal:0},entries:[{id:1,date:'2026-11-20',kind:'f
 const phase=(page,p,id)=>page.waitForFunction(({p,id})=>FormresanAccount.getState().phase===p&&(!id||FormresanAccount.getState().userId===id),{p,id},{timeout:5000}).catch(async error=>{console.log(await page.evaluate(()=>({auth:FormresanAuth.getState(),account:FormresanAccount.getState()})));throw error;});
 const idle=page=>page.waitForFunction(()=>FormresanAuth.getState().ready&&!FormresanAuth.getState().busy,null,{timeout:5000}).catch(async error=>{console.log(await page.evaluate(()=>({auth:FormresanAuth.getState(),account:FormresanAccount.getState()})));throw error;});
 const login=async(page,email='a@example.invalid')=>{await idle(page);await page.locator('#authEmail').fill(email);await page.locator('#authPassword').fill('synthetic-test-password');await page.locator('#authSubmit').click();};
+const sdkHint=(page,event='SIGNED_OUT')=>page.evaluate(({key,event})=>{const channel=new BroadcastChannel(key);channel.postMessage({event,session:null});setTimeout(()=>channel.close(),0);},{key,event});
 
 test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
   const browser=await chromium.launch({headless:true});
@@ -56,6 +57,7 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       }
       if(url.pathname==='/auth/v1/user'){
         const user=fixture.users.get((request.headers().authorization||'').replace('Bearer ',''));
+        if(fixture.userGate){fixture.userHeld=(fixture.userHeld||0)+1;await fixture.userGate;}
         return user?reply(200,user):reply(401,{message:'invalid token'});
       }
       if(url.pathname==='/auth/v1/logout')return fixture.logoutError?reply(503,{message:'synthetic logout failure'}):route.fulfill({status:204,headers:{'access-control-allow-origin':'*'}});
@@ -126,10 +128,6 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       assert.notEqual(await page.evaluate(()=>FormresanAccount.getState().phase),'signed_in');
       assert.notEqual(await other.evaluate(()=>FormresanAccount.getState().phase),'signed_in');
       assert.equal(await page.evaluate(k=>localStorage.getItem(k),key),null);
-      // SDK:ts logout-notifieringar kan fortfarande levereras efter locksläpp.
-      // De ska få stoppa ett överlappande försök. Omladdning etablerar en ny
-      // livscykel innan vi separat verifierar återhämtning med konto B.
-      await page.reload();await idle(page);await other.reload();await idle(other);
       await login(other,'b@example.invalid');await phase(other,'signed_in',B);await phase(page,'signed_in',B);
       assert.equal(await page.locator('main').isVisible(),false);await done(f);
     });
@@ -143,24 +141,25 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       assert.equal(await frame.evaluate(()=>FormresanAuth===parent.FormresanAuth),true);
       assert.equal(f.fixture.sdk,2); // En i varje toppdokument; ingen i iframen.
       await page.locator('#authLogout').click();await idle(page);await phase(other,'signed_out');
-      // Ny livscykel efter utloggning: inga gamla SDK-notifieringar ska behöva
-      // ignoreras för att kontobyte ska lyckas. Se dokumenterad begränsning.
-      await page.reload();await idle(page);await other.reload();await idle(other);
       await login(other,'b@example.invalid');await phase(other,'signed_in',B);await phase(page,'signed_in',B);
       assert.equal(await other.locator('main').isVisible(),false);assert.equal(await page.locator('main').isVisible(),false);
       await other.locator('#authLogout').click();await idle(other);await phase(page,'signed_out');
-      await page.reload();await idle(page);await other.reload();await idle(other);
       await login(page);await phase(page,'signed_in',A);await phase(other,'signed_in',A);
       await done(f);
     });
-    await t.test('Känd blockerare: sent SDK-SIGNED_OUT låser även ett nyare verifierat konto',async()=>{
-      const f=await setup(),{page,context}=f;await login(page,'b@example.invalid');await phase(page,'signed_in',B);await idle(page);
+    await t.test('Sent SDK-SIGNED_OUT kräver ny getUser utan att ersätta nyare global avsikt',async()=>{
+      const f=await setup(),{page,context,fixture}=f;await login(page,'b@example.invalid');await phase(page,'signed_in',B);await idle(page);
       const old=await context.newPage();await old.goto(base);await phase(old,'signed_in',B);await idle(old);
       await page.evaluate(()=>{window.beforeLateLogout=FormresanAccount.captureAccount();});
+      const intent=await page.evaluate(()=>localStorage.getItem('formresan_account_lifecycle_v1'));
+      let release;fixture.userGate=new Promise(r=>release=r);
       // SDK:ts BroadcastChannel saknar appens generationsnummer. Simulera en
       // fördröjd notifiering från en äldre flik med SDK:ts faktiska meddelandeformat.
       await old.evaluate(k=>{const channel=new BroadcastChannel(k);channel.postMessage({event:'SIGNED_OUT',session:null});setTimeout(()=>channel.close(),0);},key);
-      await phase(page,'signed_out');await phase(old,'signed_out');
+      await phase(page,'verifying');await phase(old,'verifying');
+      assert.equal(await page.evaluate(()=>{try{FormresanAccount.captureAccount();return false;}catch{return true;}}),true);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('formresan_account_lifecycle_v1')),intent);
+      fixture.userGate=null;release();await phase(page,'signed_in',B);await phase(old,'signed_in',B);
       assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).user.id,key),B);
       assert.equal(await page.evaluate(async()=>{try{await beforeLateLogout.store.readMain();return false;}catch{return true;}}),true);
       assert.equal(await page.locator('main').isVisible(),false);assert.equal(await old.locator('main').isVisible(),false);
@@ -172,7 +171,53 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       assert.match(await page.locator('#authMessage').innerText(),/Utloggningen kunde inte slutföras/);
       assert.equal(await page.locator('main').isVisible(),false);
       fixture.logoutError=false;await page.locator('#authLogout').click();await idle(page);await phase(page,'signed_out');
-      await page.reload();await idle(page);await login(page,'b@example.invalid');await phase(page,'signed_in',B);
+      await login(page,'b@example.invalid');await phase(page,'signed_in',B);
+      assert.equal(await page.locator('main').isVisible(),false);await done(f);
+    });
+    await t.test('Samtidiga A/B-försök kan inte låta äldre cleanup avbryta nyare avsikt',async()=>{
+      const f=await setup(),{page,context,fixture}=f;await idle(page);
+      const other=await context.newPage();await other.goto(base);await idle(other);
+      let release;fixture.hold=new Promise(r=>release=r);
+      await login(page);while(!fixture.held)await new Promise(r=>setTimeout(r,10));
+      await login(other,'b@example.invalid');await other.waitForFunction(()=>FormresanAuth.getState().busy);
+      assert.equal(fixture.calls.filter(c=>c.grant==='password').length,1);
+      release();await idle(page);await idle(other);await phase(page,'signed_in',B);await phase(other,'signed_in',B);
+      assert.equal(await page.evaluate(()=>FormresanAuth.getState().message),'');
+      assert.equal(await page.locator('main').isVisible(),false);
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('formresan_v1')).entries[0].name),legacy.entries[0].name);
+      await done(f);
+    });
+    await t.test('Sent getUser-svar kan inte återöppna efter verklig utloggning i annan flik',async()=>{
+      const f=await setup(),{page,context,fixture}=f;await login(page);await phase(page,'signed_in',A);await idle(page);
+      const other=await context.newPage();await other.goto(base+'training/index.html');await phase(other,'signed_in',A);await idle(other);
+      let release;fixture.userGate=new Promise(r=>release=r);
+      await page.evaluate(()=>{window.lateVerification=FormresanAuth.retry();});await phase(page,'verifying');await phase(other,'verifying');
+      const until=Date.now()+5000;while(!fixture.userHeld&&Date.now()<until)await new Promise(r=>setTimeout(r,10));assert.ok(fixture.userHeld);
+      await other.locator('#authLogout').click();await phase(page,'signed_out');
+      fixture.userGate=null;release();
+      await page.evaluate(()=>lateVerification);await idle(other);await phase(page,'signed_out');await phase(other,'signed_out');
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('formresan_account_lifecycle_v1')).intent),'logout');
+      assert.equal(await page.evaluate(()=>{try{FormresanAccount.captureAccount();return false;}catch{return true;}}),true);
+      assert.equal(await other.locator('main').isVisible(),false);await done(f);
+    });
+    await t.test('Tvetydigt SIGNED_OUT och offline låser; nätverksåterkomst kräver ny verifiering',async()=>{
+      const f=await setup(),{page,fixture}=f;await login(page);await phase(page,'signed_in',A);await idle(page);
+      await page.evaluate(()=>{window.oldOfflineAccount=FormresanAccount.captureAccount();});
+      fixture.offline=true;await sdkHint(page);await phase(page,'error');
+      assert.equal(await page.evaluate(()=>{try{FormresanAccount.captureAccount();return false;}catch{return true;}}),true);
+      fixture.offline=false;await page.locator('#authRetry').click();await idle(page);await phase(page,'signed_in',A);
+      assert.equal(await page.evaluate(async()=>{try{await oldOfflineAccount.store.readMain();return false;}catch{return true;}}),true);
+      assert.equal(await page.locator('main').isVisible(),false);await done(f);
+    });
+    await t.test('SDK-utloggning efter nekad refresh spärrar flikar även utan appens logout-markör',async()=>{
+      const f=await setup(),{page,context,fixture}=f;await login(page);await phase(page,'signed_in',A);await idle(page);
+      const other=await context.newPage();await other.goto(base+'training/index.html');await phase(other,'signed_in',A);await idle(other);
+      fixture.refreshes.clear();
+      await other.evaluate(k=>{const session=JSON.parse(localStorage.getItem(k));session.expires_at=1;localStorage.setItem(k,JSON.stringify(session));},key);
+      await other.reload();await idle(other);await phase(other,'signed_out');await phase(page,'signed_out');
+      assert.ok(fixture.refresh>0);
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('formresan_account_lifecycle_v1')).intent),'verify');
+      assert.equal(await page.evaluate(()=>{try{FormresanAccount.captureAccount();return false;}catch{return true;}}),true);
       assert.equal(await page.locator('main').isVisible(),false);await done(f);
     });
     await t.test('SDK-laddningsfel och offline-verifiering lämnar privata vyer låsta',async()=>{
