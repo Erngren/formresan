@@ -17,7 +17,10 @@
   const config = window.FormresanAuthConfig;
   const configured = config && config.enabled === true;
   function validConfig() {
-    return configured && location.protocol === 'https:' && Object.keys(config).sort().join(',') === 'deploymentOrigin,enabled,publishableKey,url' &&
+    const test=window.FormresanAuthTestRelease;
+    const testArtifact=test!==undefined||window.FormresanAuthTestEnvironmentValid!==undefined;
+    const environmentValid=!testArtifact||(window.FormresanAuthTestEnvironmentValid===true&&test?.authEnabled===true&&test.deploymentOrigin===config?.deploymentOrigin);
+    return environmentValid && configured && location.protocol === 'https:' && Object.keys(config).sort().join(',') === 'deploymentOrigin,enabled,publishableKey,url' &&
       config.deploymentOrigin === location.origin &&
       typeof config.url === 'string' && /^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(config.url) &&
       typeof config.publishableKey === 'string' && /^sb_publishable_[A-Za-z0-9_-]{20,200}$/.test(config.publishableKey);
