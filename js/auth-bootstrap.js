@@ -17,7 +17,7 @@
   const config = window.FormresanAuthConfig;
   const configured = config && config.enabled === true;
   function validConfig() {
-    return configured && Object.keys(config).sort().join(',') === 'deploymentOrigin,enabled,publishableKey,url' &&
+    return configured && location.protocol === 'https:' && Object.keys(config).sort().join(',') === 'deploymentOrigin,enabled,publishableKey,url' &&
       config.deploymentOrigin === location.origin &&
       typeof config.url === 'string' && /^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(config.url) &&
       typeof config.publishableKey === 'string' && /^sb_publishable_[A-Za-z0-9_-]{20,200}$/.test(config.publishableKey);
@@ -42,7 +42,12 @@
     signal?.addEventListener('abort', stop, {once:true});
     if (signal?.aborted) stop();
     const timer = setTimeout(stop, 15000);
-    try { return await fetch(input, {...init, signal:abort.signal, redirect:'error'}); }
+    try {
+      const response = await fetch(input, {...init, signal:abort.signal, redirect:'error'});
+      // Behåll tidsgränsen även under hämtningen av svarskroppen.
+      await response.clone().arrayBuffer();
+      return response;
+    }
     finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
   }
   async function exclusive(task) {
