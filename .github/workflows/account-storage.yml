@@ -17,9 +17,6 @@ jobs:
   chromium:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      FORMRESAN_PLAYWRIGHT: ${{ runner.temp }}/formresan-browser-tests/node_modules/playwright
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/formresan-chromium
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,5 +26,10 @@ jobs:
           node-version: '22'
       - run: npm install --prefix "${{ runner.temp }}/formresan-browser-tests" --no-package-lock playwright@1.65.1
       - run: node "${{ runner.temp }}/formresan-browser-tests/node_modules/playwright/cli.js" install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/formresan-chromium
       - run: node --check js/storage.js
       - run: node --test tests/account-storage.cjs tests/local-data-safety.cjs
+        env:
+          FORMRESAN_PLAYWRIGHT: ${{ runner.temp }}/formresan-browser-tests/node_modules/playwright
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/formresan-chromium
