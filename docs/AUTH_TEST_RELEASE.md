@@ -26,6 +26,30 @@ Endast kopior ändras. Båda HTML-sidorna får testtitel och testskript före la
 
 `AUTH_TEST_MANIFEST.json` skrivs sist med källrevision, läge, origin och SHA-256 för varje artefaktfil. Text normaliseras till LF, ingen tidsstämpel används. Samma källbytes, revision och indata ger identiska filer/manifest. Revisionen ensam bevisar inte ren checkout: använd den granskade committen och kontrollera filhasharna innan en framtida publicering. Ett ändrat manifest kan inte i sig verifiera ägarens godkännande; det är ingen digital signatur. Inga artefakter laddas upp eller publiceras av CI.
 
+## Godkänt planval och lokal cacheförberedelse
+
+Efter steg 6 har projektägaren godkänt Netlify Private som planval för en ensam testansvarig samt lokal förberedelse av cacheheaders. Inget konto, projekt, domännamn, abonnemang eller åtkomstskydd har skapats eller verifierats. Godkännandet omfattar inte publicering, riktig Auth eller hostade tester.
+
+Byggaren genererar nu följande `_headers` **endast i testartefakten**, innan filhasharna beräknas:
+
+```text
+/*
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+  Netlify-CDN-Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+```
+
+Regeln avser alla statiska sökvägar, inklusive huvud-/tränings-HTML och Auth-skripten oavsett query-parametrar. Browserpolicyn och de mer specifika CDN-fälten är uttryckliga så de inte oavsiktligt ärver olika cachepolicyer. Netlify beskriver headerprioritet och kan behandla CDN-fält internt; räkna inte med att alla tre cachefält syns i webbläsarens svar. Inget påstående om faktisk edge-cache görs utifrån enbart lokal filgenerering. Se [Netlifys headerformat](https://docs.netlify.com/manage/routing/headers/) och [cachepolicy/prioritet](https://docs.netlify.com/build/caching/caching-overview/).
+
+`_headers` ingår i manifestet för både avstängda och framtida uttryckligen aktiverade testbyggen. Lägg inte till eller redigera den efter hashgranskning: bygg om i en ny katalog. Ingen `_headers` läggs i repots rot och den ordinarie appens HTML, Auth-konfiguration och datalagring ändras inte. Policyn skickas inte till externa Supabase-/CDN-origins av denna fil.
+
+Lokala prov kontrollerar regelns scope och värden, manifestets hash, upptäckt av efterhandsändring samt bevarad källkonfiguration. Browserproven använder lokalt uppfylld HTTP, inte Netlifys headerprocessor. Efter separat godkänd publicering av en **avstängd** release måste därför faktisk Cache-Control och X-Robots-Tag kontrolleras på autentiserade statiska svar för `/`, `/training/`, konfigurationsskript och manifest. Kontrollera även att obehörig åtkomst nekas, inklusive deploy-adresser. Detta är inte gjort här.
+
+No-store tömmer inte tidigare cacher eller localStorage och stoppar inte en redan körande SDK. Noindex är inte åtkomstskydd. Gamla flikar/kodversioner måste stängas/laddas om; serveråterkallelse av sessioner är en separat åtgärd. Inga Clear-Site-Data-, cookie- eller raderingsregler införs.
+
+Publicering av avstängd artefakt, Auth-aktivering och verkliga Auth-tester kräver separata uttryckliga godkännanden. Bootstrap kan göra Auth-anrop redan vid sidstart när enabled är true. En aktiv artefakt får därför inte publiceras förrän **både** aktivering och hostade anrop har godkänts; ett godkännande av enbart lokal byggförberedelse räcker aldrig. Ingen Git-koppling, automatisk deploy eller aktivering vid merge läggs till.
+
 ## Förberedd aktiveringsväg – ska inte köras med riktiga värden ännu
 
 Ett framtida uttryckligen godkänt bygge kräver **både** `--activate-auth-test` och `--approved-config /ABSOLUT/EXTERN/approval.json`. Utan båda avvisas aktivering. Inga miljövariabler, GitHub variables/secrets eller URL-parametrar kan implicit slå på Auth.
@@ -89,8 +113,8 @@ Senare checklista, varje punkt dokumenteras med enbart sanerad status/timing och
 node --test tests/auth-test-release.cjs tests/auth-login.cjs tests/account-lifecycle.cjs tests/account-storage.cjs tests/local-data-safety.cjs
 ```
 
-Testverktyg/miljövariabler enligt [AUTH_LOGIN.md](AUTH_LOGIN.md). Lokalt passerade **61 prov**, inklusive överordnade grupper, utan överhoppade browser-/byggprov. Byggproven testar determinism, hashmanifest, avstängt standardläge, förbjudna origins/Git-mappar/nyckeltyper, explicit aktivering och utebliven överskrivning. Browserprov vid 390 × 844 uppfyller alla filer/SDK lokalt, spärrar övriga anrop och kontrollerar testbanner, direkt träning, fel origin/konfiguration och att gamla data finns kvar men inte visas. Aktiveringsprovet använder endast syntetiska värden; ingen riktig Auth-server kontaktas.
+Testverktyg/miljövariabler enligt [AUTH_LOGIN.md](AUTH_LOGIN.md). Efter den lokala cacheförberedelsen passerade **66 prov**, inklusive överordnade grupper, utan överhoppade browser-/byggprov. Byggproven testar determinism, hashmanifest, avstängt standardläge, förbjudna origins/Git-mappar/nyckeltyper, explicit aktivering och utebliven överskrivning. Browserprov vid 390 × 844 uppfyller alla filer/SDK lokalt, spärrar övriga anrop och kontrollerar testbanner, direkt träning, fel origin/konfiguration och att gamla data finns kvar men inte visas. Aktiveringsprovet använder endast syntetiska värden; ingen riktig Auth-server kontaktas.
 
-Befintliga lokala databas-/guardprov: 17 passerade, ett tvåanslutningsprov hoppades över med PGlite. CI kör även befintliga isolerade PostgreSQL-, RPC- och Supabase Auth/REST-flöden; faktisk status länkas i PR:n. Inga SQL-tester/migrationer ändras. Inga deploy-/upload-steg, Pages-rättigheter, secrets eller variables läggs till.
+Tidigare lokal backendverifiering: 17 databas-/guardprov passerade och ett tvåanslutningsprov hoppades över med PGlite; den körningen gjordes före cacheförberedelsen. CI kör även befintliga isolerade PostgreSQL-, RPC- och Supabase Auth/REST-flöden; faktisk status länkas i PR:n. Inga SQL-tester/migrationer ändras. Inga deploy-/upload-steg, Pages-rättigheter, secrets eller variables läggs till.
 
 Före riktig testaktivering återstår: godkänd separat host/origin och dess publiceringsprocess, bekräftad projektadress/publishable key och produktionsoriginlista utanför Git, två bekräftade syntetiska konton, granskning av den lokala flikfixen och plan för verkliga Auth-/Safari-prov, releasegranskning och särskilt godkännande av publicering samt varje typ av hostat Auth-anrop ovan. Ingen av dessa framtida behörigheter antas av detta uppdrag.
