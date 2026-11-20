@@ -23,7 +23,7 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       window.legacyReads=[];const read=Storage.prototype.getItem;
       Storage.prototype.getItem=function(k){if(['formresan_v1','formresan_training_v14'].includes(k))window.legacyReads.push(k);return read.call(this,k);};
     },legacy);
-    const fixture={calls:[],sdk:0,errors:[],hold:null,offline:false,refresh:0,users:new Map(),refreshes:new Map()};
+    const fixture={calls:[],sdk:0,errors:[],hold:null,offline:false,logoutError:false,refresh:0,users:new Map(),refreshes:new Map()};
     function session(id){
       const user={id,aud:'authenticated',role:'authenticated',email:(id===A?'a':'b')+'@example.invalid',created_at:'2026-11-20T00:00:00Z',app_metadata:{provider:'email'},user_metadata:{}};
       const payload={sub:id,exp:Math.floor(Date.now()/1000)+3600,aud:'authenticated',role:'authenticated'};
@@ -58,7 +58,7 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
         const user=fixture.users.get((request.headers().authorization||'').replace('Bearer ',''));
         return user?reply(200,user):reply(401,{message:'invalid token'});
       }
-      if(url.pathname==='/auth/v1/logout')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*'}});
+      if(url.pathname==='/auth/v1/logout')return fixture.logoutError?reply(503,{message:'synthetic logout failure'}):route.fulfill({status:204,headers:{'access-control-allow-origin':'*'}});
       fixture.errors.push('Otillåten Auth-endpoint');return route.abort();
     });
     const page=await context.newPage();
@@ -148,7 +148,32 @@ test('Officiell Supabase SDK och inloggning i Chromium 390 × 844',async t=>{
       await page.reload();await idle(page);await other.reload();await idle(other);
       await login(other,'b@example.invalid');await phase(other,'signed_in',B);await phase(page,'signed_in',B);
       assert.equal(await other.locator('main').isVisible(),false);assert.equal(await page.locator('main').isVisible(),false);
+      await other.locator('#authLogout').click();await idle(other);await phase(page,'signed_out');
+      await page.reload();await idle(page);await other.reload();await idle(other);
+      await login(page);await phase(page,'signed_in',A);await phase(other,'signed_in',A);
       await done(f);
+    });
+    await t.test('Känd blockerare: sent SDK-SIGNED_OUT låser även ett nyare verifierat konto',async()=>{
+      const f=await setup(),{page,context}=f;await login(page,'b@example.invalid');await phase(page,'signed_in',B);await idle(page);
+      const old=await context.newPage();await old.goto(base);await phase(old,'signed_in',B);await idle(old);
+      await page.evaluate(()=>{window.beforeLateLogout=FormresanAccount.captureAccount();});
+      // SDK:ts BroadcastChannel saknar appens generationsnummer. Simulera en
+      // fördröjd notifiering från en äldre flik med SDK:ts faktiska meddelandeformat.
+      await old.evaluate(k=>{const channel=new BroadcastChannel(k);channel.postMessage({event:'SIGNED_OUT',session:null});setTimeout(()=>channel.close(),0);},key);
+      await phase(page,'signed_out');await phase(old,'signed_out');
+      assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).user.id,key),B);
+      assert.equal(await page.evaluate(async()=>{try{await beforeLateLogout.store.readMain();return false;}catch{return true;}}),true);
+      assert.equal(await page.locator('main').isVisible(),false);assert.equal(await old.locator('main').isVisible(),false);
+      await done(f);
+    });
+    await t.test('Utloggningsfel håller låst och kan återhämtas utan falsk framgång',async()=>{
+      const f=await setup(),{page,fixture}=f;await login(page);await phase(page,'signed_in',A);await idle(page);
+      fixture.logoutError=true;await page.locator('#authLogout').click();await idle(page);await phase(page,'error');
+      assert.match(await page.locator('#authMessage').innerText(),/Utloggningen kunde inte slutföras/);
+      assert.equal(await page.locator('main').isVisible(),false);
+      fixture.logoutError=false;await page.locator('#authLogout').click();await idle(page);await phase(page,'signed_out');
+      await page.reload();await idle(page);await login(page,'b@example.invalid');await phase(page,'signed_in',B);
+      assert.equal(await page.locator('main').isVisible(),false);await done(f);
     });
     await t.test('SDK-laddningsfel och offline-verifiering lämnar privata vyer låsta',async()=>{
       const f=await setup();await login(f.page);await phase(f.page,'signed_in',A);await idle(f.page);

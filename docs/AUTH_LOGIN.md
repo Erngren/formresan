@@ -1,5 +1,7 @@
 # Säker inloggningsgrund – steg 3
 
+> Steg 4: [AUTH_TEST_RELEASE.md](AUTH_TEST_RELEASE.md) beskriver separat artefaktbyggare, isolerad origin, bekräftad flikblockerare och en ännu inte körd hostad testplan. Konfigurationen i repot är fortsatt avstängd. Nedan beskrivs steg 3 historiskt.
+
 20 november 2026. Utgångspunkt: main `b231605`, inklusive PR #24.
 
 ## Vad som är byggt och vad som är avstängt

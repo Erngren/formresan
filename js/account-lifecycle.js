@@ -158,9 +158,10 @@
     }
     // Konfigurationen laddas före appkoden. Lås innan legacy-data ens läses,
     // även när SDK-bootstrapen ännu inte hunnit laddas över nätverket.
-    if (window.FormresanAuthConfig !== undefined && window.FormresanAuthConfig?.enabled !== false) {
+    if (window.FormresanAuthTestRelease !== undefined || window.FormresanAuthTestEnvironmentValid !== undefined ||
+      window.FormresanAuthConfig !== undefined && window.FormresanAuthConfig?.enabled !== false) {
       managed = true; blocked = true; FormresanStorage.suspendLegacy();
-      invalidate('verifying');
+      invalidate(window.FormresanAuthConfig?.enabled===false?'signed_out':'verifying');
     }
     return Object.freeze({getState, attachAuth, verify, signOut, cancel, beginSignIn,
       captureAccount: () => {
